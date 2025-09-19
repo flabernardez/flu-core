@@ -167,3 +167,6 @@ require_once plugin_dir_path( __FILE__ ) . 'flu-progress.php';
 
 // Include geolocation functionality
 require_once plugin_dir_path( __FILE__ ) . 'flu-geolocation.php';
+
+// Include analytics functionality
+require_once plugin_dir_path( __FILE__ ) . 'flu-analytics.php';
