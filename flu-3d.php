@@ -96,12 +96,14 @@ function flu_3d_aframe_functionality() {
         }
     </style>
     <script>
+        console.log('🎥 3D script loading on page:', window.location.pathname);
+
         document.addEventListener('DOMContentLoaded', function() {
             const capturaDivs = document.querySelectorAll('.flu-captura');
 
             capturaDivs.forEach(function(div) {
-                requestCameraPermission(div);
-                requestGyroscopePermission();
+                requestCameraAccess(div);
+                enableGyroscopeIfPermitted();
 
                 const flu3dImg = div.querySelector('.flu-3d img');
 
@@ -117,33 +119,129 @@ function flu_3d_aframe_functionality() {
             });
         });
 
-        function requestCameraPermission(container) {
-            navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+        function requestCameraAccess(container) {
+            // Check if there's already a video element in this container
+            if (container.querySelector('video')) {
+                console.log('Camera already active in this container');
+                return;
+            }
+
+            // Get permissions from cookie
+            function getCookie(name) {
+                const value = "; " + document.cookie;
+                const parts = value.split("; " + name + "=");
+                if (parts.length === 2) return parts.pop().split(";").shift();
+                return null;
+            }
+
+            function getPermissions() {
+                const cookie = getCookie('flu_permissions');
+                if (cookie) {
+                    try {
+                        return JSON.parse(decodeURIComponent(cookie));
+                    } catch (e) {
+                        return {};
+                    }
+                }
+                return {};
+            }
+
+            const permissions = getPermissions();
+
+            console.log('Camera permission status:', permissions.camera);
+
+            if (permissions.camera === 'denied') {
+                console.log('Camera permission was denied previously');
+                return;
+            }
+
+            if (permissions.camera !== 'granted') {
+                console.log('Camera permission not yet granted, skipping camera access');
+                return;
+            }
+
+            // Only try to access camera if permission was explicitly granted
+            navigator.mediaDevices.getUserMedia({
+                video: {
+                    facingMode: 'environment',
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                }
+            })
                 .then(function(stream) {
+                    // Double check that video wasn't added while waiting for permission
+                    if (container.querySelector('video')) {
+                        console.log('Video already exists, stopping new stream');
+                        stream.getTracks().forEach(track => track.stop());
+                        return;
+                    }
+
                     const video = document.createElement('video');
                     video.autoplay = true;
                     video.muted = true;
                     video.playsInline = true;
                     video.srcObject = stream;
+
+                    // Add cleanup when the page is unloaded
+                    window.addEventListener('beforeunload', function() {
+                        if (stream) {
+                            stream.getTracks().forEach(track => track.stop());
+                        }
+                    });
+
                     container.appendChild(video);
+                    console.log('Camera access successful');
                 })
                 .catch(function(error) {
-                    console.error('Error al acceder a la cámara:', error);
+                    console.log('Camera access failed:', error);
+
+                    // If it failed due to permission, update the cookie
+                    if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+                        const permissions = getPermissions();
+                        permissions.camera = 'denied';
+
+                        function setCookie(name, value, days) {
+                            var expires = "";
+                            if (days) {
+                                var date = new Date();
+                                date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+                                expires = "; expires=" + date.toUTCString();
+                            }
+                            document.cookie = name + "=" + value + expires + "; path=/";
+                        }
+
+                        setCookie('flu_permissions', encodeURIComponent(JSON.stringify(permissions)), 365);
+                    }
                 });
         }
 
-        function requestGyroscopePermission() {
-            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                DeviceOrientationEvent.requestPermission()
-                    .then(function(response) {
-                        if (response === 'granted') {
-                            enableGyroscope();
-                        }
-                    })
-                    .catch(function(error) {
-                        console.error('Error giroscopio:', error);
-                    });
-            } else {
+        function enableGyroscopeIfPermitted() {
+            // Get permissions from cookie
+            function getCookie(name) {
+                const value = "; " + document.cookie;
+                const parts = value.split("; " + name + "=");
+                if (parts.length === 2) return parts.pop().split(";").shift();
+                return null;
+            }
+
+            function getPermissions() {
+                const cookie = getCookie('flu_permissions');
+                if (cookie) {
+                    try {
+                        return JSON.parse(decodeURIComponent(cookie));
+                    } catch (e) {
+                        return {};
+                    }
+                }
+                return {};
+            }
+
+            const permissions = getPermissions();
+
+            if (permissions.gyro === 'granted') {
+                enableGyroscope();
+            } else if (!permissions.gyro && typeof DeviceOrientationEvent === 'undefined') {
+                // Fallback for non-iOS devices where permissions weren't set yet
                 enableGyroscope();
             }
         }
@@ -153,7 +251,6 @@ function flu_3d_aframe_functionality() {
         }
 
         function handleOrientation(event) {
-
             // Debug - añadir esto temporalmente
             console.log('Alpha:', event.alpha, 'Beta:', event.beta, 'Gamma:', event.gamma);
             const cameras = document.querySelectorAll('a-camera');
@@ -168,7 +265,6 @@ function flu_3d_aframe_functionality() {
                 camera.setAttribute('rotation', beta + ' ' + alpha + ' ' + (-gamma));
             });
         }
-
 
         function createBasicAFrameScene(container) {
             const scene = document.createElement('a-scene');

@@ -58,9 +58,9 @@ function flu_geo_meta_box_callback( $post ) {
     echo '<tr>';
     echo '<th scope="row">Tolerancia de ubicación</th>';
     echo '<td>';
-    echo '<label for="flu_geo_tolerance_strict"><input type="radio" id="flu_geo_tolerance_strict" name="flu_geo_tolerance" value="strict" ' . checked( $tolerance, 'strict', false ) . '> Estricta (10m)</label><br>';
-    echo '<label for="flu_geo_tolerance_normal"><input type="radio" id="flu_geo_tolerance_normal" name="flu_geo_tolerance" value="normal" ' . checked( $tolerance, 'normal', false ) . '> Normal (50m)</label><br>';
-    echo '<label for="flu_geo_tolerance_amplio"><input type="radio" id="flu_geo_tolerance_amplio" name="flu_geo_tolerance" value="amplio" ' . checked( $tolerance, 'amplio', false ) . '> Amplio (200m)</label><br>';
+    echo '<label for="flu_geo_tolerance_strict"><input type="radio" id="flu_geo_tolerance_strict" name="flu_geo_tolerance" value="strict" ' . checked( $tolerance, 'strict', false ) . '> Estricta (5m)</label><br>';
+    echo '<label for="flu_geo_tolerance_normal"><input type="radio" id="flu_geo_tolerance_normal" name="flu_geo_tolerance" value="normal" ' . checked( $tolerance, 'normal', false ) . '> Normal (10m)</label><br>';
+    echo '<label for="flu_geo_tolerance_amplio"><input type="radio" id="flu_geo_tolerance_amplio" name="flu_geo_tolerance" value="amplio" ' . checked( $tolerance, 'amplio', false ) . '> Amplio (50m)</label><br>';
     echo '</td>';
     echo '</tr>';
     echo '</table>';
@@ -149,7 +149,161 @@ function flu_geo_save_meta_box_data( $post_id ) {
 add_action( 'save_post', 'flu_geo_save_meta_box_data' );
 
 /**
- * Add geolocation validation to pages with coordinates
+ * Check if current page is game start page
+ */
+function flu_geo_is_game_start_page() {
+    $current_url = $_SERVER['REQUEST_URI'];
+
+    // Check if URL is exactly /virus/ or /eu/virus/ (with optional trailing slash)
+    $is_virus_start = preg_match('#^/virus/?$#', $current_url);
+    $is_eu_virus_start = preg_match('#^/eu/virus/?$#', $current_url);
+
+    $result = $is_virus_start || $is_eu_virus_start;
+
+    // Debug log
+    error_log("URL: $current_url, Is game start: " . ($result ? 'YES' : 'NO'));
+
+    return $result;
+}
+
+/**
+ * Request permissions only on game start pages
+ */
+function flu_geo_request_permissions() {
+    if ( ! flu_geo_is_game_start_page() ) {
+        return;
+    }
+    ?>
+    <!-- DEBUG: Esta página SÍ es página de inicio del juego -->
+    <script>
+        console.log('🎮 GAME START PAGE DETECTED - Will request permissions');
+
+        function getCookie(name) {
+            const value = "; " + document.cookie;
+            const parts = value.split("; " + name + "=");
+            if (parts.length === 2) return parts.pop().split(";").shift();
+            return null;
+        }
+
+        function setCookie(name, value, days) {
+            var expires = "";
+            if (days) {
+                var date = new Date();
+                date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+                expires = "; expires=" + date.toUTCString();
+            }
+            document.cookie = name + "=" + value + expires + "; path=/";
+        }
+
+        function getPermissions() {
+            const cookie = getCookie('flu_permissions');
+            if (cookie) {
+                try {
+                    return JSON.parse(decodeURIComponent(cookie));
+                } catch (e) {
+                    return {};
+                }
+            }
+            return {};
+        }
+
+        function savePermissions(permissions) {
+            setCookie('flu_permissions', encodeURIComponent(JSON.stringify(permissions)), 365);
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Game start page detected - checking permissions');
+
+            // Check if permissions were already requested
+            const existingPermissions = getPermissions();
+            if (existingPermissions.requested === true) {
+                console.log('Permissions already requested previously:', existingPermissions);
+                return;
+            }
+
+            // Request all permissions sequentially
+            requestPermissionsSequentially();
+        });
+
+        async function requestPermissionsSequentially() {
+            const permissions = {
+                requested: true,
+                geo: 'denied',
+                camera: 'denied',
+                gyro: 'denied',
+                timestamp: new Date().toISOString()
+            };
+
+            try {
+                // 1. Request geolocation permission
+                console.log('Requesting geolocation permission...');
+                if (navigator.geolocation) {
+                    try {
+                        const position = await new Promise((resolve, reject) => {
+                            navigator.geolocation.getCurrentPosition(resolve, reject, {
+                                enableHighAccuracy: true,
+                                timeout: 10000,
+                                maximumAge: 60000
+                            });
+                        });
+                        console.log('Geolocation permission granted');
+                        permissions.geo = 'granted';
+                    } catch (error) {
+                        console.log('Geolocation permission denied:', error.message);
+                        permissions.geo = 'denied';
+                    }
+                } else {
+                    permissions.geo = 'not_available';
+                }
+
+                // 2. Request camera permission
+                console.log('Requesting camera permission...');
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        video: { facingMode: 'environment' }
+                    });
+                    console.log('Camera permission granted');
+                    permissions.camera = 'granted';
+                    // Stop the stream immediately
+                    stream.getTracks().forEach(track => track.stop());
+                } catch (error) {
+                    console.log('Camera permission denied:', error);
+                    permissions.camera = 'denied';
+                }
+
+                // 3. Request gyroscope permission (iOS)
+                console.log('Requesting gyroscope permission...');
+                if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    try {
+                        const response = await DeviceOrientationEvent.requestPermission();
+                        console.log('Gyroscope permission:', response);
+                        permissions.gyro = response;
+                    } catch (error) {
+                        console.log('Gyroscope permission error:', error);
+                        permissions.gyro = 'denied';
+                    }
+                } else {
+                    // For non-iOS devices, gyroscope is usually available without explicit permission
+                    permissions.gyro = 'granted';
+                }
+
+                // Save all permissions to cookie
+                savePermissions(permissions);
+                console.log('All permissions requested and saved to cookie:', permissions);
+
+            } catch (error) {
+                console.error('Error requesting permissions:', error);
+                // Save even if there were errors
+                savePermissions(permissions);
+            }
+        }
+    </script>
+    <?php
+}
+add_action( 'wp_footer', 'flu_geo_request_permissions' );
+
+/**
+ * Add geolocation validation to pages with coordinates (without requesting permissions again)
  */
 function flu_geo_add_validation_script() {
     if ( ! is_page() ) {
@@ -165,13 +319,13 @@ function flu_geo_add_validation_script() {
         return;
     }
 
-    $tolerance_meters = 50;
+    $tolerance_meters = 10;
     switch ( $tolerance ) {
         case 'strict':
-            $tolerance_meters = 10;
+            $tolerance_meters = 5;
             break;
         case 'amplio':
-            $tolerance_meters = 200;
+            $tolerance_meters = 50;
             break;
     }
 
@@ -206,11 +360,44 @@ function flu_geo_add_validation_script() {
                 return;
             }
 
+            // Get permissions from cookie instead of localStorage
+            function getCookie(name) {
+                const value = "; " + document.cookie;
+                const parts = value.split("; " + name + "=");
+                if (parts.length === 2) return parts.pop().split(";").shift();
+                return null;
+            }
+
+            function getPermissions() {
+                const cookie = getCookie('flu_permissions');
+                if (cookie) {
+                    try {
+                        return JSON.parse(decodeURIComponent(cookie));
+                    } catch (e) {
+                        return {};
+                    }
+                }
+                return {};
+            }
+
+            const permissions = getPermissions();
+
+            if (permissions.geo === 'denied') {
+                document.body.classList.add('geo-error');
+                window.dispatchEvent(new CustomEvent('fluGeoError', {
+                    detail: { error: 'Permission denied' }
+                }));
+                return;
+            }
+
             navigator.geolocation.getCurrentPosition(
                 function(position) {
                     var userLat = position.coords.latitude;
                     var userLng = position.coords.longitude;
                     var distance = calculateDistance(targetLat, targetLng, userLat, userLng);
+
+                    console.log('User location:', userLat, userLng);
+                    console.log('Distance to target:', distance, 'meters');
 
                     if (distance <= tolerance) {
                         document.body.classList.add('geo-validated');

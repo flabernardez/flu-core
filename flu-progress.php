@@ -374,13 +374,17 @@ function flu_core_reset_visited_pages() {
         wp_die( 'Error de seguridad' );
     }
 
-    // Clear both cookies
+    // Clear progress cookies
     $cookie_name = 'flu_visited_pages';
     $captured_cookie_name = 'flu_captured_pages';
     setcookie( $cookie_name, '', time() - 3600, '/' );
     setcookie( $captured_cookie_name, '', time() - 3600, '/' );
 
-    wp_send_json_success( 'Progreso reseteado correctamente' );
+    // Clear permissions cookie - NUEVA LÍNEA
+    $permissions_cookie_name = 'flu_permissions';
+    setcookie( $permissions_cookie_name, '', time() - 3600, '/' );
+
+    wp_send_json_success( 'Progreso y permisos reseteados correctamente' );
 }
 add_action( 'wp_ajax_flu_core_reset_visited', 'flu_core_reset_visited_pages' );
 add_action( 'wp_ajax_nopriv_flu_core_reset_visited', 'flu_core_reset_visited_pages' );

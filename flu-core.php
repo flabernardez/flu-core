@@ -119,6 +119,8 @@ add_filter('wp_check_filetype_and_ext', 'flu_core_check_glb_mime_type', 10, 4);
 /**
  * Basic camera functionality for .flu-captura divs
  */
+// COMENTAR O ELIMINAR esta función completa en flu-core.php:
+/*
 function flu_core_simple_camera() {
     ?>
     <style>
@@ -158,6 +160,7 @@ function flu_core_simple_camera() {
     <?php
 }
 add_action('wp_footer', 'flu_core_simple_camera');
+*/
 
 // Include 3D functionality
 require_once plugin_dir_path( __FILE__ ) . 'flu-3d.php';
