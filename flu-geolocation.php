@@ -58,9 +58,9 @@ function flu_geo_meta_box_callback( $post ) {
     echo '<tr>';
     echo '<th scope="row">Tolerancia de ubicación</th>';
     echo '<td>';
-    echo '<label for="flu_geo_tolerance_strict"><input type="radio" id="flu_geo_tolerance_strict" name="flu_geo_tolerance" value="strict" ' . checked( $tolerance, 'strict', false ) . '> Estricta (5m)</label><br>';
-    echo '<label for="flu_geo_tolerance_normal"><input type="radio" id="flu_geo_tolerance_normal" name="flu_geo_tolerance" value="normal" ' . checked( $tolerance, 'normal', false ) . '> Normal (10m)</label><br>';
-    echo '<label for="flu_geo_tolerance_amplio"><input type="radio" id="flu_geo_tolerance_amplio" name="flu_geo_tolerance" value="amplio" ' . checked( $tolerance, 'amplio', false ) . '> Amplio (50m)</label><br>';
+    echo '<label for="flu_geo_tolerance_strict"><input type="radio" id="flu_geo_tolerance_strict" name="flu_geo_tolerance" value="strict" ' . checked( $tolerance, 'strict', false ) . '> Estricta (10m)</label><br>';
+    echo '<label for="flu_geo_tolerance_normal"><input type="radio" id="flu_geo_tolerance_normal" name="flu_geo_tolerance" value="normal" ' . checked( $tolerance, 'normal', false ) . '> Normal (50m)</label><br>';
+    echo '<label for="flu_geo_tolerance_amplio"><input type="radio" id="flu_geo_tolerance_amplio" name="flu_geo_tolerance" value="amplio" ' . checked( $tolerance, 'amplio', false ) . '> Amplio (200m)</label><br>';
     echo '</td>';
     echo '</tr>';
     echo '</table>';
@@ -149,161 +149,33 @@ function flu_geo_save_meta_box_data( $post_id ) {
 add_action( 'save_post', 'flu_geo_save_meta_box_data' );
 
 /**
- * Check if current page is game start page
+ * Enqueue Google Maps API
  */
-function flu_geo_is_game_start_page() {
-    $current_url = $_SERVER['REQUEST_URI'];
-
-    // Check if URL is exactly /virus/ or /eu/virus/ (with optional trailing slash)
-    $is_virus_start = preg_match('#^/virus/?$#', $current_url);
-    $is_eu_virus_start = preg_match('#^/eu/virus/?$#', $current_url);
-
-    $result = $is_virus_start || $is_eu_virus_start;
-
-    // Debug log
-    error_log("URL: $current_url, Is game start: " . ($result ? 'YES' : 'NO'));
-
-    return $result;
-}
-
-/**
- * Request permissions only on game start pages
- */
-function flu_geo_request_permissions() {
-    if ( ! flu_geo_is_game_start_page() ) {
+function flu_geo_enqueue_google_maps() {
+    if ( ! is_page() ) {
         return;
     }
-    ?>
-    <!-- DEBUG: Esta página SÍ es página de inicio del juego -->
-    <script>
-        console.log('🎮 GAME START PAGE DETECTED - Will request permissions');
 
-        function getCookie(name) {
-            const value = "; " + document.cookie;
-            const parts = value.split("; " + name + "=");
-            if (parts.length === 2) return parts.pop().split(";").shift();
-            return null;
-        }
+    $post_id = get_the_ID();
+    $latitude = get_post_meta( $post_id, '_flu_geo_latitude', true );
+    $longitude = get_post_meta( $post_id, '_flu_geo_longitude', true );
 
-        function setCookie(name, value, days) {
-            var expires = "";
-            if (days) {
-                var date = new Date();
-                date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
-                expires = "; expires=" + date.toUTCString();
-            }
-            document.cookie = name + "=" + value + expires + "; path=/";
-        }
+    if ( empty( $latitude ) || empty( $longitude ) ) {
+        return;
+    }
 
-        function getPermissions() {
-            const cookie = getCookie('flu_permissions');
-            if (cookie) {
-                try {
-                    return JSON.parse(decodeURIComponent(cookie));
-                } catch (e) {
-                    return {};
-                }
-            }
-            return {};
-        }
-
-        function savePermissions(permissions) {
-            setCookie('flu_permissions', encodeURIComponent(JSON.stringify(permissions)), 365);
-        }
-
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('Game start page detected - checking permissions');
-
-            // Check if permissions were already requested
-            const existingPermissions = getPermissions();
-            if (existingPermissions.requested === true) {
-                console.log('Permissions already requested previously:', existingPermissions);
-                return;
-            }
-
-            // Request all permissions sequentially
-            requestPermissionsSequentially();
-        });
-
-        async function requestPermissionsSequentially() {
-            const permissions = {
-                requested: true,
-                geo: 'denied',
-                camera: 'denied',
-                gyro: 'denied',
-                timestamp: new Date().toISOString()
-            };
-
-            try {
-                // 1. Request geolocation permission
-                console.log('Requesting geolocation permission...');
-                if (navigator.geolocation) {
-                    try {
-                        const position = await new Promise((resolve, reject) => {
-                            navigator.geolocation.getCurrentPosition(resolve, reject, {
-                                enableHighAccuracy: true,
-                                timeout: 10000,
-                                maximumAge: 60000
-                            });
-                        });
-                        console.log('Geolocation permission granted');
-                        permissions.geo = 'granted';
-                    } catch (error) {
-                        console.log('Geolocation permission denied:', error.message);
-                        permissions.geo = 'denied';
-                    }
-                } else {
-                    permissions.geo = 'not_available';
-                }
-
-                // 2. Request camera permission
-                console.log('Requesting camera permission...');
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({
-                        video: { facingMode: 'environment' }
-                    });
-                    console.log('Camera permission granted');
-                    permissions.camera = 'granted';
-                    // Stop the stream immediately
-                    stream.getTracks().forEach(track => track.stop());
-                } catch (error) {
-                    console.log('Camera permission denied:', error);
-                    permissions.camera = 'denied';
-                }
-
-                // 3. Request gyroscope permission (iOS)
-                console.log('Requesting gyroscope permission...');
-                if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                    try {
-                        const response = await DeviceOrientationEvent.requestPermission();
-                        console.log('Gyroscope permission:', response);
-                        permissions.gyro = response;
-                    } catch (error) {
-                        console.log('Gyroscope permission error:', error);
-                        permissions.gyro = 'denied';
-                    }
-                } else {
-                    // For non-iOS devices, gyroscope is usually available without explicit permission
-                    permissions.gyro = 'granted';
-                }
-
-                // Save all permissions to cookie
-                savePermissions(permissions);
-                console.log('All permissions requested and saved to cookie:', permissions);
-
-            } catch (error) {
-                console.error('Error requesting permissions:', error);
-                // Save even if there were errors
-                savePermissions(permissions);
-            }
-        }
-    </script>
-    <?php
+    wp_enqueue_script(
+        'google-maps-geo',
+        'https://maps.googleapis.com/maps/api/js?key=AIzaSyA5RJ70oNMmFe-cwV-ibuZ8RCIy5L0vNhU&libraries=geometry',
+        array(),
+        null,
+        true
+    );
 }
-add_action( 'wp_footer', 'flu_geo_request_permissions' );
+add_action( 'wp_enqueue_scripts', 'flu_geo_enqueue_google_maps' );
 
 /**
- * Add geolocation validation to pages with coordinates (without requesting permissions again)
+ * Add geolocation validation to pages with coordinates
  */
 function flu_geo_add_validation_script() {
     if ( ! is_page() ) {
@@ -319,28 +191,30 @@ function flu_geo_add_validation_script() {
         return;
     }
 
-    $tolerance_meters = 10;
+    $tolerance_meters = 50;
     switch ( $tolerance ) {
         case 'strict':
-            $tolerance_meters = 5;
+            $tolerance_meters = 10;
             break;
         case 'amplio':
-            $tolerance_meters = 50;
+            $tolerance_meters = 200;
             break;
     }
 
     ?>
     <script>
-        console.log('Geo script loading...');
-
         var targetLat = <?php echo floatval( $latitude ); ?>;
         var targetLng = <?php echo floatval( $longitude ); ?>;
         var tolerance = <?php echo intval( $tolerance_meters ); ?>;
 
-        console.log('Target coordinates:', targetLat, targetLng);
-        console.log('Tolerance:', tolerance, 'meters');
-
         function calculateDistance(lat1, lng1, lat2, lng2) {
+            if (typeof google !== 'undefined' && google.maps && google.maps.geometry) {
+                var ubicacionEspecifica = new google.maps.LatLng(lat1, lng1);
+                var ubicacionActual = new google.maps.LatLng(lat2, lng2);
+                return google.maps.geometry.spherical.computeDistanceBetween(ubicacionActual, ubicacionEspecifica);
+            }
+
+            // Fallback: Haversine formula
             var R = 6371e3;
             var φ1 = lat1 * Math.PI/180;
             var φ2 = lat2 * Math.PI/180;
@@ -355,75 +229,90 @@ function flu_geo_add_validation_script() {
             return R * c;
         }
 
-        function checkGeolocation() {
+        function checkGeolocation(button) {
             if (!navigator.geolocation) {
+                console.error('Geolocalización no soportada');
+                window.location.hash = '#localizacion-ko';
                 return;
             }
 
-            // Get permissions from cookie instead of localStorage
-            function getCookie(name) {
-                const value = "; " + document.cookie;
-                const parts = value.split("; " + name + "=");
-                if (parts.length === 2) return parts.pop().split(";").shift();
-                return null;
+            var originalText = button.textContent;
+            button.textContent = 'Comprobando...';
+            button.style.pointerEvents = 'none';
+
+            // Agregar la clase active al contenedor progress-btn si existe
+            var progressBtn = button.closest('.progress-btn');
+            if (progressBtn) {
+                progressBtn.classList.add('active');
             }
 
-            function getPermissions() {
-                const cookie = getCookie('flu_permissions');
-                if (cookie) {
-                    try {
-                        return JSON.parse(decodeURIComponent(cookie));
-                    } catch (e) {
-                        return {};
-                    }
-                }
-                return {};
+            // Primero pedir permiso de giroscopio en iOS (antes de la geolocalización)
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                console.log('iOS detectado - pidiendo permiso de giroscopio primero...');
+                DeviceOrientationEvent.requestPermission()
+                    .then(function(response) {
+                        console.log('Respuesta permiso giroscopio:', response);
+                        // Continuar con geolocalización independientemente de la respuesta
+                        proceedWithGeolocation(button, originalText, progressBtn);
+                    })
+                    .catch(function(error) {
+                        console.log('Error permiso giroscopio (continuando):', error);
+                        // Continuar con geolocalización aunque falle
+                        proceedWithGeolocation(button, originalText, progressBtn);
+                    });
+            } else {
+                // Android o navegadores sin restricción - continuar directamente
+                proceedWithGeolocation(button, originalText, progressBtn);
             }
+        }
 
-            const permissions = getPermissions();
-
-            if (permissions.geo === 'denied') {
-                document.body.classList.add('geo-error');
-                window.dispatchEvent(new CustomEvent('fluGeoError', {
-                    detail: { error: 'Permission denied' }
-                }));
-                return;
-            }
-
+        function proceedWithGeolocation(button, originalText, progressBtn) {
             navigator.geolocation.getCurrentPosition(
                 function(position) {
                     var userLat = position.coords.latitude;
                     var userLng = position.coords.longitude;
                     var distance = calculateDistance(targetLat, targetLng, userLat, userLng);
 
-                    console.log('User location:', userLat, userLng);
-                    console.log('Distance to target:', distance, 'meters');
+                    console.log('Distancia calculada:', distance, 'metros');
+                    console.log('Tolerancia:', tolerance, 'metros');
+
+                    var tiempoEspera = 2000;
 
                     if (distance <= tolerance) {
-                        document.body.classList.add('geo-validated');
-
-                        window.dispatchEvent(new CustomEvent('fluGeoValidated', {
-                            detail: { distance: distance, tolerance: tolerance }
-                        }));
+                        console.log('✓ Ubicación correcta');
+                        setTimeout(function() {
+                            window.location.hash = '#captura';
+                            button.textContent = originalText;
+                            button.style.pointerEvents = 'auto';
+                            if (progressBtn) {
+                                progressBtn.classList.remove('active');
+                            }
+                        }, tiempoEspera);
                     } else {
-                        document.body.classList.add('geo-out-of-range');
-
-                        window.dispatchEvent(new CustomEvent('fluGeoOutOfRange', {
-                            detail: { distance: distance, tolerance: tolerance }
-                        }));
+                        console.log('✗ Fuera de rango');
+                        setTimeout(function() {
+                            window.location.hash = '#localizacion-ko';
+                            button.textContent = originalText;
+                            button.style.pointerEvents = 'auto';
+                            if (progressBtn) {
+                                progressBtn.classList.remove('active');
+                            }
+                        }, tiempoEspera);
                     }
                 },
                 function(error) {
-                    document.body.classList.add('geo-error');
-
-                    window.dispatchEvent(new CustomEvent('fluGeoError', {
-                        detail: { error: error.message }
-                    }));
+                    console.error('Error de geolocalización:', error.message);
+                    button.textContent = originalText;
+                    button.style.pointerEvents = 'auto';
+                    if (progressBtn) {
+                        progressBtn.classList.remove('active');
+                    }
+                    window.location.hash = '#localizacion-ko';
                 },
                 {
                     enableHighAccuracy: true,
                     timeout: 10000,
-                    maximumAge: 30000
+                    maximumAge: 0
                 }
             );
         }
@@ -434,70 +323,90 @@ function flu_geo_add_validation_script() {
             capturaLinks.forEach(function(link) {
                 link.addEventListener('click', function(e) {
                     e.preventDefault();
-
-                    var originalText = this.textContent;
-                    var spinner = '<span class="geo-loading"></span>';
-                    this.innerHTML = 'Verificando ubicación...' + spinner;
-                    this.style.pointerEvents = 'none';
-
-                    var self = this;
-
-                    setTimeout(function() {
-                        if (document.body.classList.contains('geo-validated')) {
-                            window.location.hash = '#captura';
-                        } else if (document.body.classList.contains('geo-out-of-range') ||
-                            document.body.classList.contains('geo-error')) {
-                            window.location.hash = '#localizacion-ko';
-                        } else {
-                            setTimeout(function() {
-                                if (document.body.classList.contains('geo-validated')) {
-                                    window.location.hash = '#captura';
-                                } else {
-                                    window.location.hash = '#localizacion-ko';
-                                }
-
-                                self.innerHTML = originalText;
-                                self.style.pointerEvents = 'auto';
-                            }, 2000);
-                            return;
-                        }
-
-                        self.innerHTML = originalText;
-                        self.style.pointerEvents = 'auto';
-                    }, 500);
+                    checkGeolocation(this);
                 });
             });
         }
 
         document.addEventListener('DOMContentLoaded', function() {
-            setTimeout(checkGeolocation, 1000);
             handleCapturaLinks();
         });
+
+        // Prevenir caché de la página
+        window.onpageshow = function(event) {
+            if (event.persisted) {
+                window.location.reload();
+            }
+        };
     </script>
     <?php
 }
 add_action( 'wp_footer', 'flu_geo_add_validation_script' );
 
 /**
- * Add CSS for loading animation
+ * Add CSS for loading animation and progress button
  */
 function flu_geo_add_css_classes() {
+    if ( ! is_page() ) {
+        return;
+    }
+
+    $post_id = get_the_ID();
+    $latitude = get_post_meta( $post_id, '_flu_geo_latitude', true );
+    $longitude = get_post_meta( $post_id, '_flu_geo_longitude', true );
+
+    if ( empty( $latitude ) || empty( $longitude ) ) {
+        return;
+    }
+
     echo '<style>
-        .geo-loading {
-            display: inline-block;
-            width: 16px;
-            height: 16px;
-            border: 2px solid rgba(0,0,0,0.1);
-            border-top: 2px solid #007cba;
-            border-radius: 50%;
-            animation: geoSpin 1s linear infinite;
-            margin-left: 8px;
-            vertical-align: middle;
+        .progress-btn {
+            transition: all 0.4s ease;
+            position: relative;
         }
         
-        @keyframes geoSpin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        .progress-btn .wp-block-button__link {
+            position: relative;
+            z-index: 10;
+        }
+        
+        .progress-btn .progress {
+            width: 0;
+            z-index: 5;
+            background-color: var(--wp--preset--color--accent, #4CC3D9);
+            opacity: 0;
+            transition: all 0.3s ease;
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            border-radius: inherit;
+        }
+        
+        .progress-btn.active .progress {
+            opacity: 0.3;
+            animation: progress-anim 2s ease 0s forwards;
+        }
+        
+        @keyframes progress-anim {
+            0% {
+                width: 0%;
+            }
+            10% {
+                width: 15%;
+            }
+            30% {
+                width: 40%;
+            }
+            50% {
+                width: 55%;
+            }
+            80% {
+                width: 100%;
+            }
+            100% {
+                width: 100%;
+            }
         }
     </style>';
 }

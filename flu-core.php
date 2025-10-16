@@ -173,3 +173,6 @@ require_once plugin_dir_path( __FILE__ ) . 'flu-geolocation.php';
 
 // Include analytics functionality
 require_once plugin_dir_path( __FILE__ ) . 'flu-analytics.php';
+
+// Include back button functionality
+require_once plugin_dir_path( __FILE__ ) . 'flu-button-back.php';
