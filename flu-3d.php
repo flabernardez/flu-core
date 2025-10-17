@@ -43,45 +43,40 @@ function flu_3d_aframe_functionality() {
             display: block !important;
             margin-top: -100vh;
             pointer-events: none;
-            /* Animación de aparición del modelo con delay aleatorio */
             opacity: 0;
             animation: fadeInModel 0.3s ease-in-out forwards;
         }
         .flu-3d img {
             display: none;
         }
-        /* Solo sobrescribir el position fixed problemático */
         html.a-fullscreen .flu-captura .a-canvas {
             position: absolute !important;
         }
-        /* Asegurar que el botón quede por encima */
         .wp-block-button,
         a[href*="atrapado"],
         .flu-captura .wp-block-button a {
             position: relative !important;
             z-index: 1000 !important;
             pointer-events: auto !important;
-            /* Animación de aparición del botón */
             opacity: 0;
             animation: fadeInButton 0.3s ease-in-out forwards;
         }
-        /* Asegurar que el canvas de A-Frame no bloquee clicks */
         .flu-captura .a-canvas {
             position: absolute !important;
             pointer-events: none !important;
         }
 
-        /* Modal #atrapado - Estado inicial oculto */
         #atrapado {
             position: fixed;
             top: 0;
             width: 100vw;
             height: 100%;
-            z-index: 2000;
+            z-index: -1;
             opacity: 0;
+            visibility: hidden;
             transform: scale(0.9);
-            pointer-events: none;
-            transition: opacity 0.4s ease-out, transform 0.4s ease-out;
+            pointer-events: none !important;
+            transition: opacity 0.4s ease-out, transform 0.4s ease-out, visibility 0s 0.4s, z-index 0s 0.4s;
             overflow-y: auto;
             display: flex;
             align-items: center;
@@ -89,20 +84,25 @@ function flu_3d_aframe_functionality() {
             padding: 20px;
         }
 
-        /* Contenedor interno para centrar el contenido */
         #atrapado > * {
             width: 100%;
             max-width: 600px;
+            pointer-events: none !important;
         }
 
-        /* Modal #atrapado - Estado visible */
         #atrapado.show {
+            z-index: 2000;
             opacity: 1;
+            visibility: visible;
             transform: scale(1);
-            pointer-events: auto;
+            pointer-events: auto !important;
+            transition: opacity 0.4s ease-out, transform 0.4s ease-out, visibility 0s, z-index 0s;
         }
 
-        /* Keyframes para las animaciones */
+        #atrapado.show > * {
+            pointer-events: auto !important;
+        }
+
         @keyframes fadeInModel {
             from {
                 opacity: 0;
@@ -129,7 +129,7 @@ function flu_3d_aframe_functionality() {
         var cameraInitialized = false;
         var gyroscopeInitialized = false;
         var capturaContainers = [];
-        var lastValidRotation = { x: 0, y: 0 }; // Para detectar cambios bruscos
+        var lastValidRotation = { x: 0, y: 0 };
 
         document.addEventListener('DOMContentLoaded', function() {
             const capturaDivs = document.querySelectorAll('.flu-captura');
@@ -137,7 +137,6 @@ function flu_3d_aframe_functionality() {
             capturaDivs.forEach(function(div) {
                 capturaContainers.push(div);
 
-                // Preparar la escena 3D pero NO activar la cámara todavía
                 const flu3dImg = div.querySelector('.flu-3d img');
 
                 if (flu3dImg && flu3dImg.src) {
@@ -151,73 +150,151 @@ function flu_3d_aframe_functionality() {
                 }
             });
 
-            // Verificar si ya estamos en #captura al cargar
+            initializeAtrapado();
+            interceptCapturaLinks();
+
             if (window.location.hash === '#captura') {
                 initializeCameraForCaptura();
             }
 
-            // Escuchar cambios en el hash
             window.addEventListener('hashchange', function() {
                 if (window.location.hash === '#captura' && !cameraInitialized) {
                     initializeCameraForCaptura();
                 }
 
-                // Mostrar modal #atrapado cuando se llega a ese hash
                 if (window.location.hash === '#atrapado') {
-                    var atrapado = document.getElementById('atrapado');
-                    if (atrapado) {
-                        // NO hacer scroll, mantener posición actual
-                        // Prevenir comportamiento de scroll del navegador
-                        event.preventDefault();
-
-                        // Mostrar modal con animación
-                        setTimeout(function() {
-                            atrapado.classList.add('show');
-                        }, 50);
-                    }
+                    showAtrapado();
+                } else {
+                    hideAtrapado();
                 }
             });
 
-            // Prevenir scroll al hash #atrapado
-            window.addEventListener('click', function(e) {
+            document.addEventListener('click', function(e) {
                 var target = e.target.closest('a[href="#atrapado"]');
                 if (target) {
                     e.preventDefault();
+                    e.stopPropagation();
                     window.location.hash = '#atrapado';
                 }
-            });
+            }, true);
 
-            // Verificar si ya estamos en #atrapado al cargar
             if (window.location.hash === '#atrapado') {
-                var atrapado = document.getElementById('atrapado');
-                if (atrapado) {
-                    setTimeout(function() {
-                        atrapado.classList.add('show');
-                    }, 50);
-                }
+                showAtrapado();
             }
         });
+
+        function interceptCapturaLinks() {
+            var capturaLinks = document.querySelectorAll('a[href="#captura"]');
+
+            capturaLinks.forEach(function(link) {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    if (typeof DeviceOrientationEvent !== 'undefined' &&
+                        typeof DeviceOrientationEvent.requestPermission === 'function') {
+
+                        DeviceOrientationEvent.requestPermission()
+                            .then(function(response) {
+                                if (response === 'granted') {
+                                    requestCameraAndNavigate();
+                                } else {
+                                    alert('Necesitas activar el sensor de movimiento para ver el modelo en AR');
+                                }
+                            })
+                            .catch(function(error) {
+                                alert('Error: ' + error.message);
+                            });
+                    } else {
+                        requestCameraAndNavigate();
+                    }
+                }, true);
+            });
+        }
+
+        function requestCameraAndNavigate() {
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+                .then(function(stream) {
+                    stream.getTracks().forEach(function(track) {
+                        track.stop();
+                    });
+
+                    window.location.hash = '#captura';
+                })
+                .catch(function(error) {
+                    alert('Error al acceder a la cámara: ' + error.message);
+                });
+        }
+
+        function initializeAtrapado() {
+            var atrapado = document.getElementById('atrapado');
+            if (atrapado) {
+                atrapado.classList.remove('show');
+                atrapado.style.pointerEvents = 'none';
+                atrapado.style.visibility = 'hidden';
+                atrapado.style.opacity = '0';
+                atrapado.style.zIndex = '-1';
+
+                var allChildren = atrapado.querySelectorAll('*');
+                allChildren.forEach(function(child) {
+                    child.style.pointerEvents = 'none';
+                });
+            }
+        }
+
+        function showAtrapado() {
+            var atrapado = document.getElementById('atrapado');
+            if (atrapado) {
+                window.scrollTo(0, 0);
+
+                setTimeout(function() {
+                    atrapado.classList.add('show');
+                    atrapado.style.pointerEvents = 'auto';
+                    atrapado.style.visibility = 'visible';
+                    atrapado.style.opacity = '1';
+                    atrapado.style.zIndex = '2000';
+
+                    var allChildren = atrapado.querySelectorAll('*');
+                    allChildren.forEach(function(child) {
+                        child.style.pointerEvents = 'auto';
+                    });
+                }, 50);
+            }
+        }
+
+        function hideAtrapado() {
+            var atrapado = document.getElementById('atrapado');
+            if (atrapado) {
+                atrapado.classList.remove('show');
+
+                setTimeout(function() {
+                    atrapado.style.pointerEvents = 'none';
+                    atrapado.style.visibility = 'hidden';
+                    atrapado.style.opacity = '0';
+                    atrapado.style.zIndex = '-1';
+
+                    var allChildren = atrapado.querySelectorAll('*');
+                    allChildren.forEach(function(child) {
+                        child.style.pointerEvents = 'none';
+                    });
+                }, 400);
+            }
+        }
 
         function initializeCameraForCaptura() {
             if (cameraInitialized) return;
 
-            console.log('Iniciando cámara para captura...');
             cameraInitialized = true;
 
             capturaContainers.forEach(function(container) {
                 requestCameraPermission(container);
             });
 
-            // Activar giroscopio automáticamente
-            setTimeout(function() {
-                requestGyroscopePermission();
-            }, 500);
+            enableGyroscope();
         }
 
         function requestCameraPermission(container) {
-            // Verificar si ya hay un video en el container
             if (container.querySelector('video')) {
-                console.log('Cámara ya inicializada en este contenedor');
                 return;
             }
 
@@ -229,125 +306,222 @@ function flu_3d_aframe_functionality() {
                     video.playsInline = true;
                     video.srcObject = stream;
                     container.appendChild(video);
-                    console.log('Cámara activada correctamente');
                 })
                 .catch(function(error) {
                     console.error('Error al acceder a la cámara:', error);
                 });
         }
 
-        function requestGyroscopePermission() {
+        function enableGyroscope() {
             if (gyroscopeInitialized) return;
 
-            console.log('Solicitando permiso de giroscopio...');
+            gyroscopeInitialized = true;
 
-            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-                // iOS 13+ requiere permiso explícito
-                console.log('Pidiendo permiso iOS...');
-                DeviceOrientationEvent.requestPermission()
-                    .then(function(response) {
-                        console.log('Respuesta permiso giroscopio:', response);
-                        if (response === 'granted') {
-                            gyroscopeInitialized = true;
-                            enableGyroscope();
-                        } else {
-                            console.warn('Permiso de giroscopio denegado');
-                            alert('Necesitas activar el sensor de movimiento para ver el modelo en AR');
-                        }
-                    })
-                    .catch(function(error) {
-                        console.error('Error al solicitar permiso giroscopio:', error);
-                        alert('Error al solicitar permiso: ' + error.message);
-                    });
-            } else {
-                // Android y otros navegadores no requieren permiso explícito
-                console.log('Habilitando giroscopio sin permiso (Android/otros)');
-                gyroscopeInitialized = true;
-                enableGyroscope();
-            }
-        }
-
-        function enableGyroscope() {
-            console.log('Giroscopio habilitado, esperando eventos...');
-
-            var eventReceived = false;
-
-            // Verificar que el evento funciona
-            var testHandler = function(event) {
-                if (!eventReceived && (event.alpha !== null || event.beta !== null || event.gamma !== null)) {
-                    eventReceived = true;
-                    console.log('✓ Giroscopio funcionando!');
-                    console.log('  Alpha (brújula):', event.alpha);
-                    console.log('  Beta (inclinación adelante/atrás):', event.beta);
-                    console.log('  Gamma (inclinación izq/der):', event.gamma);
-                    window.removeEventListener('deviceorientation', testHandler);
-                }
-            };
-
-            window.addEventListener('deviceorientation', testHandler);
-
-            // Si después de 3 segundos no hay eventos, reportar
-            setTimeout(function() {
-                if (!eventReceived) {
-                    console.error('⚠ No se reciben eventos del giroscopio');
-                    console.log('Verifica que el dispositivo tenga sensores de orientación');
-                }
-            }, 3000);
-
-            // Añadir el handler principal
-            window.addEventListener('deviceorientation', handleOrientation);
-        }
-
-        function handleOrientation(event) {
-            // Rotar el MODELO en lugar de la cámara (más natural estilo Pokémon GO)
-            const models = document.querySelectorAll('a-gltf-model, a-box, a-sphere');
-
-            if (models.length === 0) {
+            if ('Gyroscope' in window && 'Accelerometer' in window) {
+                tryBasicSensorsAPI();
                 return;
             }
 
-            // Solo logear cada 60 frames (~1 segundo)
-            if (!window.gyroLogCounter) window.gyroLogCounter = 0;
-            window.gyroLogCounter++;
-
-            if (window.gyroLogCounter % 60 === 0) {
-                console.log('Evento giroscopio recibido:', {
-                    alpha: event.alpha?.toFixed(2),
-                    beta: event.beta?.toFixed(2),
-                    gamma: event.gamma?.toFixed(2)
-                });
+            if ('RelativeOrientationSensor' in window) {
+                tryRelativeSensorAPI();
+                return;
             }
 
+            if ('AbsoluteOrientationSensor' in window) {
+                tryGenericSensorAPI();
+                return;
+            }
+
+            if (!window.DeviceOrientationEvent) return;
+
+            window.addEventListener('deviceorientation', handleOrientation);
+            window.addEventListener('deviceorientationabsolute', handleOrientation);
+        }
+
+        async function tryBasicSensorsAPI() {
+            if (!('Gyroscope' in window) || !('Accelerometer' in window)) {
+                return;
+            }
+
+            try {
+                const gyroscope = new Gyroscope({ frequency: 60 });
+                const accelerometer = new Accelerometer({ frequency: 60 });
+
+                let gyroData = { x: 0, y: 0, z: 0 };
+                let angles = { pitch: 0, yaw: 0, roll: 0 };
+
+                gyroscope.addEventListener('reading', function() {
+                    gyroData.x = gyroscope.x || 0;
+                    gyroData.y = gyroscope.y || 0;
+                    gyroData.z = gyroscope.z || 0;
+
+                    const dt = 1/60;
+                    angles.pitch += gyroData.x * dt * (180 / Math.PI);
+                    angles.yaw += gyroData.y * dt * (180 / Math.PI);
+                    angles.roll += gyroData.z * dt * (180 / Math.PI);
+
+                    angles.pitch = angles.pitch % 360;
+                    angles.yaw = angles.yaw % 360;
+                    angles.roll = angles.roll % 360;
+                });
+
+                accelerometer.addEventListener('reading', function() {
+                    const models = document.querySelectorAll('a-gltf-model, a-box, a-sphere');
+                    models.forEach(function(model) {
+                        const rotX = angles.pitch * 0.3;
+                        const rotY = 180 + (angles.yaw * 0.5);
+                        const rotZ = -angles.roll * 0.2;
+
+                        model.setAttribute('rotation', {
+                            x: Math.max(-15, Math.min(15, rotX)),
+                            y: rotY,
+                            z: Math.max(-10, Math.min(10, rotZ))
+                        });
+                    });
+                });
+
+                gyroscope.start();
+                accelerometer.start();
+
+            } catch (error) {
+                console.error('Error sensores básicos:', error);
+            }
+        }
+
+        async function tryRelativeSensorAPI() {
+            if (!('RelativeOrientationSensor' in window)) {
+                return;
+            }
+
+            try {
+                const sensor = new RelativeOrientationSensor({ frequency: 60 });
+
+                sensor.addEventListener('reading', function() {
+                    const models = document.querySelectorAll('a-gltf-model, a-box, a-sphere');
+                    if (models.length === 0) return;
+
+                    const q = sensor.quaternion;
+                    if (!q || q.length !== 4) return;
+
+                    const [x, y, z, w] = q;
+
+                    const sinp = 2 * (w * x + y * z);
+                    const pitch = Math.abs(sinp) >= 1 ?
+                        Math.sign(sinp) * Math.PI / 2 :
+                        Math.asin(sinp);
+
+                    const siny_cosp = 2 * (w * y - z * x);
+                    const cosy_cosp = 1 - 2 * (x * x + y * y);
+                    const yaw = Math.atan2(siny_cosp, cosy_cosp);
+
+                    const sinr_cosp = 2 * (w * z + x * y);
+                    const cosr_cosp = 1 - 2 * (y * y + z * z);
+                    const roll = Math.atan2(sinr_cosp, cosr_cosp);
+
+                    const pitchDeg = pitch * (180 / Math.PI);
+                    const yawDeg = yaw * (180 / Math.PI);
+                    const rollDeg = roll * (180 / Math.PI);
+
+                    models.forEach(function(model) {
+                        const rotX = pitchDeg * 0.3;
+                        const rotY = 180 + (yawDeg * 0.5);
+                        const rotZ = -rollDeg * 0.2;
+
+                        model.setAttribute('rotation', {
+                            x: Math.max(-15, Math.min(15, rotX)),
+                            y: rotY,
+                            z: Math.max(-10, Math.min(10, rotZ))
+                        });
+                    });
+                });
+
+                sensor.start();
+
+            } catch (error) {
+                console.error('Error Relative Sensor:', error);
+            }
+        }
+
+        async function tryGenericSensorAPI() {
+            if (!('AbsoluteOrientationSensor' in window)) {
+                return;
+            }
+
+            try {
+                const sensor = new AbsoluteOrientationSensor({ frequency: 60, referenceFrame: 'device' });
+
+                sensor.addEventListener('reading', function() {
+                    const models = document.querySelectorAll('a-gltf-model, a-box, a-sphere');
+                    if (models.length === 0) return;
+
+                    const q = sensor.quaternion;
+                    if (!q || q.length !== 4) return;
+
+                    const [x, y, z, w] = q;
+
+                    const sinp = 2 * (w * x + y * z);
+                    const pitch = Math.abs(sinp) >= 1 ?
+                        Math.sign(sinp) * Math.PI / 2 :
+                        Math.asin(sinp);
+
+                    const siny_cosp = 2 * (w * y - z * x);
+                    const cosy_cosp = 1 - 2 * (x * x + y * y);
+                    const yaw = Math.atan2(siny_cosp, cosy_cosp);
+
+                    const sinr_cosp = 2 * (w * z + x * y);
+                    const cosr_cosp = 1 - 2 * (y * y + z * z);
+                    const roll = Math.atan2(sinr_cosp, cosr_cosp);
+
+                    const pitchDeg = pitch * (180 / Math.PI);
+                    const yawDeg = yaw * (180 / Math.PI);
+                    const rollDeg = roll * (180 / Math.PI);
+
+                    models.forEach(function(model) {
+                        const rotX = pitchDeg * 0.3;
+                        const rotY = 180 + (yawDeg * 0.5);
+                        const rotZ = -rollDeg * 0.2;
+
+                        model.setAttribute('rotation', {
+                            x: Math.max(-15, Math.min(15, rotX)),
+                            y: rotY,
+                            z: Math.max(-10, Math.min(10, rotZ))
+                        });
+                    });
+                });
+
+                sensor.start();
+
+            } catch (error) {
+                console.error('Error Absolute Sensor:', error);
+            }
+        }
+
+        function handleOrientation(event) {
+            const models = document.querySelectorAll('a-gltf-model, a-box, a-sphere');
+            if (models.length === 0) return;
+
             models.forEach(function(model) {
-                // Valores del giroscopio
-                var alpha = event.alpha || 0;  // Brújula (0-360)
-                var beta = event.beta || 0;    // Inclinación adelante/atrás (-180 a 180)
-                var gamma = event.gamma || 0;  // Inclinación izquierda/derecha (-90 a 90)
+                var alpha = event.alpha || 0;
+                var beta = event.beta || 0;
+                var gamma = event.gamma || 0;
 
-                // Convertir a rotaciones para el modelo (invertidas para seguir el dispositivo)
-                // Estilo Pokémon GO: el modelo se mueve sutilmente siguiendo la inclinación
-                var rotationY = -gamma * 0.5;  // Sigue inclinación lateral
-                var rotationX = (beta - 90) * 0.3;  // Sigue inclinación adelante/atrás
+                var rotationY = -gamma * 0.5;
+                var rotationX = (beta - 90) * 0.3;
 
-                // Limitar el rango de movimiento para que sea sutil
                 rotationY = Math.max(-20, Math.min(20, rotationY));
                 rotationX = Math.max(-15, Math.min(15, rotationX));
 
-                // Filtro anti-glitch: detectar cambios demasiado bruscos (más de 30° en un frame)
                 var deltaX = Math.abs(rotationX - lastValidRotation.x);
                 var deltaY = Math.abs(rotationY - lastValidRotation.y);
 
                 if (lastValidRotation.x !== 0 && (deltaX > 30 || deltaY > 30)) {
-                    console.log('⚠️ Glitch detectado, ignorando frame (deltaX:', deltaX.toFixed(1), 'deltaY:', deltaY.toFixed(1), ')');
-                    return; // Ignorar este frame anómalo
+                    return;
                 }
 
-                // Guardar rotación válida
                 lastValidRotation.x = rotationX;
                 lastValidRotation.y = rotationY;
 
-                // Aplicar rotación base + movimiento del giroscopio
-                var baseRotationY = 180; // Rotación base (mirando al usuario)
+                var baseRotationY = 180;
 
                 model.setAttribute('rotation', {
                     x: rotationX,
@@ -419,7 +593,7 @@ function flu_3d_aframe_functionality() {
 
             const model = document.createElement('a-gltf-model');
             model.setAttribute('src', modelPath);
-            model.setAttribute('position', '0 0.8 -3');
+            model.setAttribute('position', '0 1.5 -3');
             model.setAttribute('rotation', '0 180 0');
             model.setAttribute('scale', '2 2 2');
 
@@ -428,23 +602,15 @@ function flu_3d_aframe_functionality() {
 
             container.appendChild(scene);
 
-            // Generar delay aleatorio entre 1000ms (1s) y 2000ms (2s) para el modelo
             const randomModelDelay = Math.random() * 1000 + 1000;
-
-            // El botón aparece 500ms después que el modelo
             const buttonDelay = randomModelDelay + 500;
 
-            // Aplicar delay aleatorio al modelo (a-scene)
             scene.style.animationDelay = randomModelDelay + 'ms';
 
-            // Aplicar delay al botón
-            const buttons = container.querySelectorAll('.wp-block-button, #atrapado, a[href*="atrapado"]');
+            const buttons = container.querySelectorAll('.wp-block-button, a[href*="atrapado"]');
             buttons.forEach(function(button) {
                 button.style.animationDelay = buttonDelay + 'ms';
             });
-
-            // Log para debug
-            console.log(`Modelo aparecerá en ${randomModelDelay}ms, botón en ${buttonDelay}ms`);
         }
     </script>
     <?php

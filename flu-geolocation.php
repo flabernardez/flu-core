@@ -26,7 +26,7 @@ add_action( 'admin_menu', 'flu_geo_add_settings_page' );
  * Register settings
  */
 function flu_geo_register_settings() {
-    register_setting( 'flu_geo_settings_group', 'flu_geo_google_maps_api_key', 'flu_geo_validate_api_key' );
+    register_setting( 'flu_geo_settings_group', 'flu_core_google_maps_key', 'flu_geo_validate_api_key' );
 }
 add_action( 'admin_init', 'flu_geo_register_settings' );
 
@@ -38,23 +38,23 @@ function flu_geo_validate_api_key( $api_key ) {
 
     if ( empty( $api_key ) ) {
         add_settings_error(
-            'flu_geo_google_maps_api_key',
+            'flu_core_google_maps_key',
             'empty_api_key',
             'La clave API no puede estar vacía.',
             'error'
         );
-        return get_option( 'flu_geo_google_maps_api_key' );
+        return get_option( 'flu_core_google_maps_key' );
     }
 
     // Validar formato básico de la API key (debe tener al menos 30 caracteres)
     if ( strlen( $api_key ) < 30 ) {
         add_settings_error(
-            'flu_geo_google_maps_api_key',
+            'flu_core_google_maps_key',
             'invalid_api_key',
             'La clave API parece ser inválida. Debe tener al menos 30 caracteres.',
             'error'
         );
-        return get_option( 'flu_geo_google_maps_api_key' );
+        return get_option( 'flu_core_google_maps_key' );
     }
 
     // Validar con Google Maps API
@@ -63,12 +63,12 @@ function flu_geo_validate_api_key( $api_key ) {
 
     if ( is_wp_error( $response ) ) {
         add_settings_error(
-            'flu_geo_google_maps_api_key',
+            'flu_core_google_maps_key',
             'connection_error',
             'No se pudo validar la clave API. Error de conexión.',
             'error'
         );
-        return get_option( 'flu_geo_google_maps_api_key' );
+        return get_option( 'flu_core_google_maps_key' );
     }
 
     $body = wp_remote_retrieve_body( $response );
@@ -76,17 +76,17 @@ function flu_geo_validate_api_key( $api_key ) {
 
     if ( isset( $data['status'] ) && $data['status'] === 'REQUEST_DENIED' ) {
         add_settings_error(
-            'flu_geo_google_maps_api_key',
+            'flu_core_google_maps_key',
             'invalid_api_key',
             'La clave API es inválida o no tiene los permisos necesarios. Verifica que tenga habilitadas las APIs: Geocoding API, Maps JavaScript API y Geometry API.',
             'error'
         );
-        return get_option( 'flu_geo_google_maps_api_key' );
+        return get_option( 'flu_core_google_maps_key' );
     }
 
     if ( isset( $data['status'] ) && $data['status'] === 'OK' ) {
         add_settings_error(
-            'flu_geo_google_maps_api_key',
+            'flu_core_google_maps_key',
             'valid_api_key',
             '¡Clave API validada correctamente!',
             'success'
@@ -104,7 +104,7 @@ function flu_geo_render_settings_page() {
         return;
     }
 
-    $api_key = get_option( 'flu_geo_google_maps_api_key', '' );
+    $api_key = get_option( 'flu_core_google_maps_key', '' );
     $api_key_masked = ! empty( $api_key ) ? substr( $api_key, 0, 10 ) . str_repeat( '*', strlen( $api_key ) - 10 ) : '';
     ?>
     <div class="wrap">
@@ -139,13 +139,13 @@ function flu_geo_render_settings_page() {
             <table class="form-table">
                 <tr>
                     <th scope="row">
-                        <label for="flu_geo_google_maps_api_key">Google Maps API Key</label>
+                        <label for="flu_core_google_maps_key">Google Maps API Key</label>
                     </th>
                     <td>
                         <input
                                 type="text"
-                                id="flu_geo_google_maps_api_key"
-                                name="flu_geo_google_maps_api_key"
+                                id="flu_core_google_maps_key"
+                                name="flu_core_google_maps_key"
                                 value="<?php echo esc_attr( $api_key ); ?>"
                                 class="regular-text"
                                 placeholder="AIzaSy..."
@@ -181,13 +181,6 @@ function flu_geo_render_settings_page() {
 }
 
 /**
- * Get Google Maps API Key
- */
-function flu_geo_get_api_key() {
-    return get_option( 'flu_geo_google_maps_api_key', '' );
-}
-
-/**
  * Add meta box to pages for geolocation settings
  */
 function flu_geo_add_meta_box() {
@@ -207,7 +200,7 @@ add_action( 'add_meta_boxes', 'flu_geo_add_meta_box' );
  */
 function flu_geo_meta_box_callback( $post ) {
     // Check if API key is configured
-    $api_key = flu_geo_get_api_key();
+    $api_key = get_option( 'flu_core_google_maps_key', '' );
 
     if ( empty( $api_key ) ) {
         echo '<div class="notice notice-error inline">';
@@ -341,6 +334,41 @@ function flu_geo_save_meta_box_data( $post_id ) {
 add_action( 'save_post', 'flu_geo_save_meta_box_data' );
 
 /**
+ * Enqueue Google Maps API
+ */
+function flu_geo_enqueue_google_maps() {
+    if ( ! is_page() ) {
+        return;
+    }
+
+    $post_id = get_the_ID();
+    $latitude = get_post_meta( $post_id, '_flu_geo_latitude', true );
+    $longitude = get_post_meta( $post_id, '_flu_geo_longitude', true );
+
+    if ( empty( $latitude ) || empty( $longitude ) ) {
+        return;
+    }
+
+    // Obtener la API key de la configuración
+    $google_maps_key = get_option( 'flu_core_google_maps_key', '' );
+
+    if ( empty( $google_maps_key ) ) {
+        error_log( 'Flu Core: Google Maps API key not configured' );
+        return;
+    }
+
+    // Cargar Google Maps API con librería geometry
+    wp_enqueue_script(
+        'google-maps-api',
+        'https://maps.googleapis.com/maps/api/js?key=' . esc_attr( $google_maps_key ) . '&libraries=geometry',
+        array(),
+        null,
+        true
+    );
+}
+add_action( 'wp_enqueue_scripts', 'flu_geo_enqueue_google_maps' );
+
+/**
  * Add geolocation validation to pages with coordinates
  */
 function flu_geo_add_validation_script() {
@@ -369,66 +397,100 @@ function flu_geo_add_validation_script() {
 
     ?>
     <script>
-        console.log('Geo script loading...');
+        console.log('Geo script loading with Google Maps...');
 
         var targetLat = <?php echo floatval( $latitude ); ?>;
         var targetLng = <?php echo floatval( $longitude ); ?>;
         var tolerance = <?php echo intval( $tolerance_meters ); ?>;
+        var geoChecked = false;
 
         console.log('Target coordinates:', targetLat, targetLng);
         console.log('Tolerance:', tolerance, 'meters');
 
-        function calculateDistance(lat1, lng1, lat2, lng2) {
-            var R = 6371e3;
-            var φ1 = lat1 * Math.PI/180;
-            var φ2 = lat2 * Math.PI/180;
-            var Δφ = (lat2-lat1) * Math.PI/180;
-            var Δλ = (lng2-lng1) * Math.PI/180;
-
-            var a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-                Math.cos(φ1) * Math.cos(φ2) *
-                Math.sin(Δλ/2) * Math.sin(Δλ/2);
-            var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-
-            return R * c;
+        // Esperar a que Google Maps esté cargado
+        function waitForGoogleMaps(callback) {
+            if (typeof google !== 'undefined' && typeof google.maps !== 'undefined' && typeof google.maps.geometry !== 'undefined') {
+                console.log('Google Maps API loaded successfully');
+                callback();
+            } else {
+                console.log('Waiting for Google Maps API...');
+                setTimeout(function() {
+                    waitForGoogleMaps(callback);
+                }, 100);
+            }
         }
 
-        function checkGeolocation() {
+        function checkGeolocationWithGoogleMaps(callback) {
             if (!navigator.geolocation) {
+                console.error('Geolocation not supported');
+                if (callback) callback(false);
                 return;
             }
 
+            if (geoChecked) {
+                var isValidated = document.body.classList.contains('geo-validated');
+                if (callback) callback(isValidated);
+                return;
+            }
+
+            // Usar navigator.geolocation pero calcular distancia con Google Maps
             navigator.geolocation.getCurrentPosition(
                 function(position) {
-                    var userLat = position.coords.latitude;
-                    var userLng = position.coords.longitude;
-                    var distance = calculateDistance(targetLat, targetLng, userLat, userLng);
+                    console.log('User position obtained:', position.coords.latitude, position.coords.longitude);
 
-                    if (distance <= tolerance) {
-                        document.body.classList.add('geo-validated');
+                    // Esperar a que Google Maps esté disponible
+                    waitForGoogleMaps(function() {
+                        geoChecked = true;
 
-                        window.dispatchEvent(new CustomEvent('fluGeoValidated', {
-                            detail: { distance: distance, tolerance: tolerance }
-                        }));
-                    } else {
-                        document.body.classList.add('geo-out-of-range');
+                        var userLat = position.coords.latitude;
+                        var userLng = position.coords.longitude;
 
-                        window.dispatchEvent(new CustomEvent('fluGeoOutOfRange', {
-                            detail: { distance: distance, tolerance: tolerance }
-                        }));
-                    }
+                        // Usar Google Maps para calcular distancia
+                        var ubicacionEspecifica = new google.maps.LatLng(targetLat, targetLng);
+                        var ubicacionActual = new google.maps.LatLng(userLat, userLng);
+                        var distance = google.maps.geometry.spherical.computeDistanceBetween(
+                            ubicacionActual,
+                            ubicacionEspecifica
+                        );
+
+                        console.log('Distance calculated with Google Maps:', distance, 'meters');
+
+                        if (distance <= tolerance) {
+                            document.body.classList.add('geo-validated');
+
+                            window.dispatchEvent(new CustomEvent('fluGeoValidated', {
+                                detail: { distance: distance, tolerance: tolerance }
+                            }));
+
+                            console.log('Location validated!');
+                            if (callback) callback(true);
+                        } else {
+                            document.body.classList.add('geo-out-of-range');
+
+                            window.dispatchEvent(new CustomEvent('fluGeoOutOfRange', {
+                                detail: { distance: distance, tolerance: tolerance }
+                            }));
+
+                            console.log('Location out of range. Distance:', distance, 'Tolerance:', tolerance);
+                            if (callback) callback(false);
+                        }
+                    });
                 },
                 function(error) {
+                    geoChecked = true;
                     document.body.classList.add('geo-error');
 
                     window.dispatchEvent(new CustomEvent('fluGeoError', {
                         detail: { error: error.message }
                     }));
+
+                    console.error('Geolocation error:', error.message);
+                    if (callback) callback(false);
                 },
                 {
                     enableHighAccuracy: true,
                     timeout: 10000,
-                    maximumAge: 30000
+                    maximumAge: 0 // Forzar obtener posición fresca
                 }
             );
         }
@@ -439,6 +501,7 @@ function flu_geo_add_validation_script() {
             capturaLinks.forEach(function(link) {
                 link.addEventListener('click', function(e) {
                     e.preventDefault();
+                    e.stopPropagation();
 
                     var originalText = this.textContent;
                     var spinner = '<span class="geo-loading"></span>';
@@ -447,35 +510,29 @@ function flu_geo_add_validation_script() {
 
                     var self = this;
 
+                    // IMPORTANTE: NO interceptar el click aquí
+                    // Dejar que flu-3d.php maneje los permisos de cámara/giroscopio primero
+
+                    // Simplemente verificar geolocalización en segundo plano
+                    waitForGoogleMaps(function() {
+                        checkGeolocationWithGoogleMaps(function(isValid) {
+                            // No hacer nada aquí, el click ya fue manejado por flu-3d.php
+                            console.log('Geolocalización verificada:', isValid ? 'OK' : 'Fuera de rango');
+                        });
+                    });
+
+                    // Restaurar el texto después de un momento
                     setTimeout(function() {
-                        if (document.body.classList.contains('geo-validated')) {
-                            window.location.hash = '#captura';
-                        } else if (document.body.classList.contains('geo-out-of-range') ||
-                            document.body.classList.contains('geo-error')) {
-                            window.location.hash = '#localizacion-ko';
-                        } else {
-                            setTimeout(function() {
-                                if (document.body.classList.contains('geo-validated')) {
-                                    window.location.hash = '#captura';
-                                } else {
-                                    window.location.hash = '#localizacion-ko';
-                                }
-
-                                self.innerHTML = originalText;
-                                self.style.pointerEvents = 'auto';
-                            }, 2000);
-                            return;
-                        }
-
                         self.innerHTML = originalText;
                         self.style.pointerEvents = 'auto';
-                    }, 500);
-                });
+                    }, 2000);
+
+                    // NO prevenir la navegación, dejar que flu-3d.php la maneje
+                }, false); // NO usar capture, dejar que flu-3d.php capture primero
             });
         }
 
         document.addEventListener('DOMContentLoaded', function() {
-            setTimeout(checkGeolocation, 1000);
             handleCapturaLinks();
         });
     </script>
