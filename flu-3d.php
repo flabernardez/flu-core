@@ -103,10 +103,6 @@ function flu_3d_aframe_functionality() {
             pointer-events: auto !important;
         }
 
-        /* ============================================
-         * SECCIÓN #CAPTURADO - SIN ANIMACIONES
-         * ============================================ */
-
         #capturado .flu-captura a-scene,
         #capturado .wp-block-button,
         #capturado a[href*="atrapado"],
@@ -116,27 +112,25 @@ function flu_3d_aframe_functionality() {
             transform: none !important;
         }
 
-        /*
-         * ⚙️ AJUSTE DE PADDING SUPERIOR DEL MODELO 3D EN #CAPTURADO
-         * Cambia el valor de "padding-top" para ajustar la posición:
-         * - 0px   = Pegado arriba
-         * - 10px  = Poco espacio
-         * - 20px  = Espacio normal (VALOR ACTUAL) ← MODIFICA AQUÍ
-         * - 30px  = Más espacio
-         */
-        #capturado .flu-captura {
-            padding-top: 20px; /* ← MODIFICA ESTE VALOR */
+        /* IMPORTANTE: Subir modelo en #capturado */
+        #capturado .flu-captura a-scene {
+            margin-top: -150vh !important;
         }
 
-        /* ============================================
-         * SECCIÓN #ATRAPADO - SIN DELAYS DE ANIMACIÓN
-         * ============================================ */
+        #capturado .flu-captura {
+            padding-top: 0px;
+        }
 
         #atrapado .flu-captura a-scene,
         #atrapado .wp-block-button,
         #atrapado a[href*="atrapado"],
         #atrapado .flu-captura .wp-block-button a {
             animation-delay: 0s !important;
+        }
+
+        /* IMPORTANTE: Subir modelo en #atrapado */
+        #atrapado .flu-captura a-scene {
+            margin-top: -110vh !important;
         }
 
         @keyframes fadeInModel {
@@ -171,21 +165,45 @@ function flu_3d_aframe_functionality() {
                 transform: translateX(-50%) translateY(0);
             }
         }
+
+        #gyro-activate-btn {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10000;
+            padding: 18px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 30px;
+            font-size: 16px;
+            font-weight: 600;
+            box-shadow: 0 8px 20px rgba(102,126,234,0.4);
+            cursor: pointer;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            transition: all 0.3s ease;
+            animation: slideUp 0.5s ease-out forwards;
+        }
+
+        #gyro-activate-btn:hover {
+            transform: translateX(-50%) scale(1.05);
+            box-shadow: 0 12px 28px rgba(102,126,234,0.6);
+        }
     </style>
     <script>
         var cameraInitialized = false;
-        var gyroscopeInitialized = false;
+        var gyroscopePermissionGranted = false;
+        var gyroscopeActive = false;
         var capturaContainers = [];
-        var lastValidRotation = { x: 0, y: 0 };
 
         document.addEventListener('DOMContentLoaded', function() {
-            const capturaDivs = document.querySelectorAll('.flu-captura');
+            console.log('🎬 Flu 3D: Initializing...');
 
+            const capturaDivs = document.querySelectorAll('.flu-captura');
             capturaDivs.forEach(function(div) {
                 capturaContainers.push(div);
-
                 const flu3dImg = div.querySelector('.flu-3d img');
-
                 if (flu3dImg && flu3dImg.src) {
                     const imgSrc = flu3dImg.src;
                     const fileName = imgSrc.split('/').pop().split('.')[0];
@@ -201,117 +219,191 @@ function flu_3d_aframe_functionality() {
             interceptCapturaLinks();
             interceptAtrapadorLinks();
 
+            // Manejar carga inicial
             if (window.location.hash === '#captura') {
-                initializeCameraForCaptura();
+                handleCapturaHash();
             }
-
             if (window.location.hash === '#atrapado') {
-                // Si ya se pidió permiso en #captura, reutilizarlo
-                if (gyroscopeInitialized) {
-                    showAtrapado();
-                } else if (typeof DeviceOrientationEvent === 'undefined' ||
-                    typeof DeviceOrientationEvent.requestPermission !== 'function') {
-                    // Android: activar directamente
-                    enableGyroscopeForAtrapado();
-                    showAtrapado();
-                } else {
-                    // iOS sin permiso previo: mostrar botón
-                    createGyroscopeButton();
-                    showAtrapado();
-                }
+                handleAtrapadorHash();
+            }
+            if (window.location.hash === '#capturado') {
+                handleCapturadoHash();
             }
 
+            // Manejar cambios de hash
             window.addEventListener('hashchange', function() {
-                if (window.location.hash === '#captura' && !cameraInitialized) {
-                    initializeCameraForCaptura();
-                }
+                console.log('🔀 Hash changed to:', window.location.hash);
 
-                if (window.location.hash === '#atrapado') {
-                    // Si es iOS y NO se ha pedido permiso antes, mostrar botón
-                    if (!gyroscopeInitialized &&
-                        typeof DeviceOrientationEvent !== 'undefined' &&
-                        typeof DeviceOrientationEvent.requestPermission === 'function') {
-                        createGyroscopeButton();
-                    }
-                    showAtrapado();
+                if (window.location.hash === '#captura') {
+                    handleCapturaHash();
+                } else if (window.location.hash === '#atrapado') {
+                    handleAtrapadorHash();
+                } else if (window.location.hash === '#capturado') {
+                    handleCapturadoHash();
                 } else {
                     hideAtrapado();
-                    // Eliminar botón si existe
-                    var existingBtn = document.getElementById('gyro-activate-btn');
-                    if (existingBtn) {
-                        existingBtn.remove();
-                    }
+                    removeGyroButton();
                 }
             });
         });
 
+        function handleCapturaHash() {
+            console.log('📸 Handling #captura');
+
+            // Si ya tenemos permiso de giroscopio, activarlo
+            if (gyroscopePermissionGranted && !gyroscopeActive) {
+                console.log('✅ Gyro permission already granted, activating...');
+                activateGyroscope();
+            }
+
+            // Inicializar cámara si no está ya
+            if (!cameraInitialized) {
+                initializeCameraForCaptura();
+            }
+        }
+
+        function handleAtrapadorHash() {
+            console.log('🎯 Handling #atrapado');
+
+            // Mostrar #atrapado
+            showAtrapado();
+
+            // Si ya tenemos permiso, activar giroscopio
+            if (gyroscopePermissionGranted && !gyroscopeActive) {
+                console.log('✅ Gyro permission already granted, activating...');
+                activateGyroscope();
+            }
+            // Si NO tenemos permiso, intentar activar directamente
+            else if (!gyroscopePermissionGranted) {
+                console.log('⚠️ No gyro permission for #atrapado, trying to activate...');
+                gyroscopePermissionGranted = true;
+                activateGyroscope();
+            }
+        }
+
+        function handleCapturadoHash() {
+            console.log('🏆 Handling #capturado');
+
+            // Si ya tenemos permiso, activar giroscopio
+            if (gyroscopePermissionGranted && !gyroscopeActive) {
+                console.log('✅ Gyro permission already granted, activating for #capturado...');
+                activateGyroscope();
+            }
+            // Si NO tenemos permiso (iOS o Android), intentar activar
+            else if (!gyroscopePermissionGranted) {
+                console.log('⚠️ No gyro permission for #capturado, trying to activate...');
+                // Marcar como concedido y activar (el sistema mostrará su propio prompt si es necesario)
+                gyroscopePermissionGranted = true;
+                activateGyroscope();
+            }
+        }
+
+        function isIOS() {
+            return typeof DeviceOrientationEvent !== 'undefined' &&
+                typeof DeviceOrientationEvent.requestPermission === 'function';
+        }
+
         function interceptCapturaLinks() {
             var capturaLinks = document.querySelectorAll('a[href="#captura"]');
+            console.log('🔗 Found', capturaLinks.length, 'captura links');
 
             capturaLinks.forEach(function(link) {
                 link.addEventListener('click', function(e) {
-                    // Si NO está marcado como geo-checked, dejar que flu-geolocation.php lo maneje primero
-                    if (this.getAttribute('data-geo-checked') !== 'true') {
-                        return; // No hacer nada, dejar pasar al handler de geo
+                    var self = this;
+
+                    // CASO 1: Ya verificado por geo - proceder a pedir cámara
+                    if (this.getAttribute('data-geo-verified') === 'true') {
+                        console.log('✅ Geo verified, requesting camera...');
+                        e.preventDefault();
+                        e.stopPropagation();
+
+                        // Limpiar el atributo para que el próximo click vuelva a verificar
+                        this.removeAttribute('data-geo-verified');
+
+                        requestCameraAndNavigate();
+                        return;
                     }
 
-                    // Si llegamos aquí, geo ya fue validada
-                    e.preventDefault();
-                    e.stopPropagation();
+                    // CASO 2: iOS sin permiso de giroscopio - pedirlo AHORA
+                    if (isIOS() && !gyroscopePermissionGranted) {
+                        e.preventDefault();
+                        e.stopPropagation();
 
-                    if (typeof DeviceOrientationEvent !== 'undefined' &&
-                        typeof DeviceOrientationEvent.requestPermission === 'function') {
-
+                        console.log('📱 iOS: Requesting gyro permission with user gesture...');
                         DeviceOrientationEvent.requestPermission()
                             .then(function(response) {
                                 if (response === 'granted') {
-                                    requestCameraAndNavigate();
+                                    console.log('✅ Gyro permission granted!');
+                                    gyroscopePermissionGranted = true;
+
+                                    // Ahora hacer click de nuevo para que flu-geolocation lo maneje
+                                    console.log('🔄 Re-clicking to trigger geo check...');
+                                    setTimeout(function() {
+                                        self.click();
+                                    }, 100);
                                 } else {
-                                    alert('Necesitas activar el sensor de movimiento para ver el modelo en AR');
+                                    console.log('❌ Gyro permission denied');
+                                    alert('Necesitas activar el sensor de movimiento para continuar');
                                 }
                             })
                             .catch(function(error) {
-                                alert('Error: ' + error.message);
+                                console.error('❌ Error requesting gyro permission:', error);
+                                alert('Error al solicitar permisos: ' + error.message);
                             });
-                    } else {
-                        requestCameraAndNavigate();
+                        return;
                     }
+
+                    // CASO 3: Android o iOS con permiso ya concedido - dejar pasar a geo
+                    if (!isIOS()) {
+                        console.log('🤖 Android detected, marking gyro as granted');
+                        gyroscopePermissionGranted = true;
+                    }
+
+                    console.log('⏭️ Passing to geo verification handler...');
+                    // No hacer nada - dejar que flu-geolocation.php lo maneje
                 }, true);
             });
         }
 
         function interceptAtrapadorLinks() {
             var atrapadorLinks = document.querySelectorAll('a[href="#atrapado"], a[href*="#atrapado"]');
+            console.log('🎯 Found', atrapadorLinks.length, 'atrapado links');
 
             atrapadorLinks.forEach(function(link) {
                 link.addEventListener('click', function(e) {
                     e.preventDefault();
                     e.stopPropagation();
 
-                    // Si ya se activó el giroscopio antes (en #captura), simplemente navegar
-                    if (gyroscopeInitialized) {
+                    console.log('🎯 Atrapado link clicked');
+
+                    // Si ya tenemos permiso, navegar directamente
+                    if (gyroscopePermissionGranted) {
+                        console.log('✅ Already have gyro permission, navigating...');
                         window.location.hash = '#atrapado';
                         return;
                     }
 
-                    // Si no, pedir permiso (solo en iOS)
-                    if (typeof DeviceOrientationEvent !== 'undefined' &&
-                        typeof DeviceOrientationEvent.requestPermission === 'function') {
-
+                    // Si es iOS, pedir permiso
+                    if (isIOS()) {
+                        console.log('📱 iOS: Requesting gyro permission...');
                         DeviceOrientationEvent.requestPermission()
                             .then(function(response) {
                                 if (response === 'granted') {
-                                    enableGyroscopeForAtrapado();
+                                    console.log('✅ Gyro permission granted');
+                                    gyroscopePermissionGranted = true;
                                     window.location.hash = '#atrapado';
                                 } else {
-                                    alert('Necesitas activar el sensor de movimiento para ver el modelo 3D en movimiento');
+                                    console.log('❌ Gyro permission denied');
+                                    alert('Necesitas activar el sensor de movimiento para ver el modelo 3D');
                                 }
                             })
                             .catch(function(error) {
-                                alert('Error al solicitar permisos');
+                                console.error('❌ Error requesting gyro permission:', error);
                             });
                     } else {
-                        enableGyroscopeForAtrapado();
+                        // Android: dar permiso y navegar
+                        console.log('🤖 Android: Granting permission and navigating...');
+                        gyroscopePermissionGranted = true;
                         window.location.hash = '#atrapado';
                     }
                 }, true);
@@ -319,14 +411,17 @@ function flu_3d_aframe_functionality() {
         }
 
         function requestCameraAndNavigate() {
+            console.log('📷 Requesting camera...');
             navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
                 .then(function(stream) {
+                    console.log('✅ Camera permission granted');
                     stream.getTracks().forEach(function(track) {
                         track.stop();
                     });
                     window.location.hash = '#captura';
                 })
                 .catch(function(error) {
+                    console.error('❌ Camera error:', error);
                     alert('Error al acceder a la cámara: ' + error.message);
                 });
         }
@@ -339,19 +434,14 @@ function flu_3d_aframe_functionality() {
                 atrapado.style.visibility = 'hidden';
                 atrapado.style.opacity = '0';
                 atrapado.style.zIndex = '-1';
-
-                var allChildren = atrapado.querySelectorAll('*');
-                allChildren.forEach(function(child) {
-                    child.style.pointerEvents = 'none';
-                });
             }
         }
 
         function showAtrapado() {
+            console.log('👁️ Showing #atrapado');
             var atrapado = document.getElementById('atrapado');
             if (atrapado) {
                 window.scrollTo(0, 0);
-
                 setTimeout(function() {
                     atrapado.classList.add('show');
                     atrapado.style.pointerEvents = 'auto';
@@ -363,62 +453,27 @@ function flu_3d_aframe_functionality() {
                     allChildren.forEach(function(child) {
                         child.style.pointerEvents = 'auto';
                     });
-
-                    // CRÍTICO: Forzar que A-Frame actualice los modelos en #atrapado
-                    setTimeout(function() {
-                        var models = atrapado.querySelectorAll('a-gltf-model, a-box, a-sphere');
-
-                        if (models.length > 0) {
-                            // Forzar actualización haciendo un pequeño cambio y luego restaurando
-                            models.forEach(function(model) {
-                                // Guardar rotación actual
-                                var currentRot = model.getAttribute('rotation');
-
-                                // Forzar cambio
-                                model.setAttribute('rotation', '0.1 0.1 0.1');
-
-                                // Restaurar inmediatamente
-                                setTimeout(function() {
-                                    if (currentRot) {
-                                        model.setAttribute('rotation', currentRot);
-                                    } else {
-                                        model.setAttribute('rotation', '0 0 0');
-                                    }
-                                }, 10);
-                            });
-                        }
-
-                        // Si el giroscopio NO está activo, activarlo ahora
-                        if (!gyroscopeInitialized) {
-                            enableGyroscopeForAtrapado();
-                        }
-                    }, 300);
                 }, 50);
             }
         }
 
         function hideAtrapado() {
+            console.log('🙈 Hiding #atrapado');
             var atrapado = document.getElementById('atrapado');
             if (atrapado) {
                 atrapado.classList.remove('show');
-
                 setTimeout(function() {
                     atrapado.style.pointerEvents = 'none';
                     atrapado.style.visibility = 'hidden';
                     atrapado.style.opacity = '0';
                     atrapado.style.zIndex = '-1';
-
-                    var allChildren = atrapado.querySelectorAll('*');
-                    allChildren.forEach(function(child) {
-                        child.style.pointerEvents = 'none';
-                    });
                 }, 400);
             }
         }
 
         function initializeCameraForCaptura() {
             if (cameraInitialized) return;
-
+            console.log('📷 Initializing camera for #captura');
             cameraInitialized = true;
 
             capturaContainers.forEach(function(container) {
@@ -426,17 +481,14 @@ function flu_3d_aframe_functionality() {
                     requestCameraPermission(container);
                 }
             });
-
-            enableGyroscope();
         }
 
         function requestCameraPermission(container) {
-            if (container.querySelector('video')) {
-                return;
-            }
+            if (container.querySelector('video')) return;
 
             navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
                 .then(function(stream) {
+                    console.log('✅ Camera stream obtained');
                     const video = document.createElement('video');
                     video.autoplay = true;
                     video.muted = true;
@@ -445,60 +497,31 @@ function flu_3d_aframe_functionality() {
                     container.appendChild(video);
                 })
                 .catch(function(error) {
-                    // Silencioso
+                    console.error('❌ Camera error:', error);
                 });
         }
 
-        function enableGyroscopeForAtrapado() {
-            var checkInterval = setInterval(function() {
-                var atrapado = document.getElementById('atrapado');
-                if (atrapado) {
-                    var model = atrapado.querySelector('a-gltf-model');
-                    if (model && model.hasLoaded) {
-                        clearInterval(checkInterval);
-                        if (!gyroscopeInitialized) {
-                            enableGyroscope();
-                        }
-                    }
-                }
-            }, 100);
-
-            setTimeout(function() {
-                clearInterval(checkInterval);
-                if (!gyroscopeInitialized) {
-                    enableGyroscope();
-                }
-            }, 3000);
-        }
-
         function createGyroscopeButton() {
-            // Evitar duplicados
             var existingBtn = document.getElementById('gyro-activate-btn');
             if (existingBtn) {
+                console.log('⚠️ Gyro button already exists');
                 return;
             }
 
-            // Crear botón flotante
+            console.log('🔘 Creating gyro activation button');
             var button = document.createElement('button');
             button.id = 'gyro-activate-btn';
             button.innerHTML = '📱 Toca para activar el movimiento 3D';
-            button.style.cssText = 'position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); z-index: 10000; padding: 18px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 30px; font-size: 16px; font-weight: 600; box-shadow: 0 8px 20px rgba(102,126,234,0.4); cursor: pointer; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; transition: all 0.3s ease;';
-
-            // Efecto hover
-            button.onmouseover = function() {
-                this.style.transform = 'translateX(-50%) scale(1.05)';
-                this.style.boxShadow = '0 12px 28px rgba(102,126,234,0.6)';
-            };
-            button.onmouseout = function() {
-                this.style.transform = 'translateX(-50%) scale(1)';
-                this.style.boxShadow = '0 8px 20px rgba(102,126,234,0.4)';
-            };
 
             button.onclick = function() {
+                console.log('🔘 Gyro button clicked');
                 DeviceOrientationEvent.requestPermission()
                     .then(function(response) {
                         if (response === 'granted') {
-                            enableGyroscopeForAtrapado();
+                            console.log('✅ Gyro permission granted');
+                            gyroscopePermissionGranted = true;
+                            activateGyroscope();
+
                             button.style.transition = 'all 0.3s ease';
                             button.style.opacity = '0';
                             button.style.transform = 'translateX(-50%) scale(0.8)';
@@ -506,6 +529,7 @@ function flu_3d_aframe_functionality() {
                                 button.remove();
                             }, 300);
                         } else {
+                            console.log('❌ Gyro permission denied');
                             button.innerHTML = '❌ Permiso denegado - Toca de nuevo';
                             button.style.background = 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)';
                             setTimeout(function() {
@@ -515,6 +539,7 @@ function flu_3d_aframe_functionality() {
                         }
                     })
                     .catch(function(error) {
+                        console.error('❌ Gyro permission error:', error);
                         button.innerHTML = '⚠️ Error - Intenta de nuevo';
                         setTimeout(function() {
                             button.innerHTML = '📱 Toca para activar el movimiento 3D';
@@ -523,226 +548,50 @@ function flu_3d_aframe_functionality() {
             };
 
             document.body.appendChild(button);
-
-            // Animación de entrada
-            setTimeout(function() {
-                button.style.animation = 'slideUp 0.5s ease-out forwards';
-            }, 100);
         }
 
-        function enableGyroscope() {
-            if (gyroscopeInitialized) return;
+        function removeGyroButton() {
+            var btn = document.getElementById('gyro-activate-btn');
+            if (btn) {
+                console.log('🗑️ Removing gyro button');
+                btn.remove();
+            }
+        }
 
-            gyroscopeInitialized = true;
-
-            if ('Gyroscope' in window && 'Accelerometer' in window) {
-                tryBasicSensorsAPI();
+        function activateGyroscope() {
+            if (gyroscopeActive) {
+                console.log('⚠️ Gyroscope already active');
                 return;
             }
 
-            if ('RelativeOrientationSensor' in window) {
-                tryRelativeSensorAPI();
-                return;
-            }
+            console.log('🎮 Activating gyroscope...');
+            gyroscopeActive = true;
 
-            if ('AbsoluteOrientationSensor' in window) {
-                tryGenericSensorAPI();
-                return;
-            }
-
+            // Intentar con DeviceOrientation (más compatible)
             if (window.DeviceOrientationEvent) {
-                window.addEventListener('deviceorientation', handleOrientation);
-                window.addEventListener('deviceorientationabsolute', handleOrientation);
-            }
-        }
-
-        async function tryBasicSensorsAPI() {
-            try {
-                const gyroscope = new Gyroscope({ frequency: 60 });
-                const accelerometer = new Accelerometer({ frequency: 60 });
-
-                let gyroData = { x: 0, y: 0, z: 0 };
-                let angles = { pitch: 0, yaw: 0, roll: 0 };
-
-                gyroscope.addEventListener('reading', function() {
-                    gyroData.x = gyroscope.x || 0;
-                    gyroData.y = gyroscope.y || 0;
-                    gyroData.z = gyroscope.z || 0;
-
-                    const dt = 1/60;
-                    angles.pitch += gyroData.x * dt * (180 / Math.PI);
-                    angles.yaw += gyroData.y * dt * (180 / Math.PI);
-                    angles.roll += gyroData.z * dt * (180 / Math.PI);
-
-                    angles.pitch = angles.pitch % 360;
-                    angles.yaw = angles.yaw % 360;
-                    angles.roll = angles.roll % 360;
-                });
-
-                accelerometer.addEventListener('reading', function() {
-                    // Buscar TODOS los modelos cada vez
-                    const models = document.querySelectorAll('a-gltf-model, a-box, a-sphere');
-
-                    models.forEach(function(model) {
-                        try {
-                            const rotX = angles.pitch * 0.3;
-                            const rotY = angles.yaw * 0.5;
-                            const rotZ = -angles.roll * 0.2;
-
-                            model.setAttribute('rotation', {
-                                x: Math.max(-15, Math.min(15, rotX)),
-                                y: rotY,
-                                z: Math.max(-10, Math.min(10, rotZ))
-                            });
-                        } catch (e) {
-                            // Silencioso
-                        }
-                    });
-                });
-
-                gyroscope.start();
-                accelerometer.start();
-
-            } catch (error) {
-                // Silencioso
-            }
-        }
-
-        async function tryRelativeSensorAPI() {
-            try {
-                const sensor = new RelativeOrientationSensor({ frequency: 60 });
-
-                sensor.addEventListener('reading', function() {
-                    // Buscar TODOS los modelos cada vez
-                    const models = document.querySelectorAll('a-gltf-model, a-box, a-sphere');
-                    if (models.length === 0) return;
-
-                    const q = sensor.quaternion;
-                    if (!q || q.length !== 4) return;
-
-                    const [x, y, z, w] = q;
-
-                    const sinp = 2 * (w * x + y * z);
-                    const pitch = Math.abs(sinp) >= 1 ?
-                        Math.sign(sinp) * Math.PI / 2 :
-                        Math.asin(sinp);
-
-                    const siny_cosp = 2 * (w * y - z * x);
-                    const cosy_cosp = 1 - 2 * (x * x + y * y);
-                    const yaw = Math.atan2(siny_cosp, cosy_cosp);
-
-                    const sinr_cosp = 2 * (w * z + x * y);
-                    const cosr_cosp = 1 - 2 * (y * y + z * z);
-                    const roll = Math.atan2(sinr_cosp, cosr_cosp);
-
-                    const pitchDeg = pitch * (180 / Math.PI);
-                    const yawDeg = yaw * (180 / Math.PI);
-                    const rollDeg = roll * (180 / Math.PI);
-
-                    models.forEach(function(model) {
-                        try {
-                            const rotX = pitchDeg * 0.3;
-                            const rotY = yawDeg * 0.5;
-                            const rotZ = -rollDeg * 0.2;
-
-                            model.setAttribute('rotation', {
-                                x: Math.max(-15, Math.min(15, rotX)),
-                                y: rotY,
-                                z: Math.max(-10, Math.min(10, rotZ))
-                            });
-                        } catch (e) {
-                            // Silencioso
-                        }
-                    });
-                });
-
-                sensor.start();
-
-            } catch (error) {
-                // Silencioso
-            }
-        }
-
-        async function tryGenericSensorAPI() {
-            try {
-                const sensor = new AbsoluteOrientationSensor({ frequency: 60, referenceFrame: 'device' });
-
-                sensor.addEventListener('reading', function() {
-                    // Buscar TODOS los modelos cada vez
-                    const models = document.querySelectorAll('a-gltf-model, a-box, a-sphere');
-                    if (models.length === 0) return;
-
-                    const q = sensor.quaternion;
-                    if (!q || q.length !== 4) return;
-
-                    const [x, y, z, w] = q;
-
-                    const sinp = 2 * (w * x + y * z);
-                    const pitch = Math.abs(sinp) >= 1 ?
-                        Math.sign(sinp) * Math.PI / 2 :
-                        Math.asin(sinp);
-
-                    const siny_cosp = 2 * (w * y - z * x);
-                    const cosy_cosp = 1 - 2 * (x * x + y * y);
-                    const yaw = Math.atan2(siny_cosp, cosy_cosp);
-
-                    const sinr_cosp = 2 * (w * z + x * y);
-                    const cosr_cosp = 1 - 2 * (y * y + z * z);
-                    const roll = Math.atan2(sinr_cosp, cosr_cosp);
-
-                    const pitchDeg = pitch * (180 / Math.PI);
-                    const yawDeg = yaw * (180 / Math.PI);
-                    const rollDeg = roll * (180 / Math.PI);
-
-                    models.forEach(function(model) {
-                        try {
-                            const rotX = pitchDeg * 0.3;
-                            const rotY = yawDeg * 0.5;
-                            const rotZ = -rollDeg * 0.2;
-
-                            model.setAttribute('rotation', {
-                                x: Math.max(-15, Math.min(15, rotX)),
-                                y: rotY,
-                                z: Math.max(-10, Math.min(10, rotZ))
-                            });
-                        } catch (e) {
-                            // Silencioso
-                        }
-                    });
-                });
-
-                sensor.start();
-
-            } catch (error) {
-                // Silencioso
+                console.log('✅ Using DeviceOrientationEvent');
+                window.addEventListener('deviceorientation', handleOrientation, true);
+                window.addEventListener('deviceorientationabsolute', handleOrientation, true);
             }
         }
 
         function handleOrientation(event) {
-            const models = document.querySelectorAll('a-gltf-model, a-box, a-sphere');
+            const models = document.querySelectorAll('a-gltf-model, a-box, a-sphere, a-cylinder');
             if (models.length === 0) return;
 
             var alpha = event.alpha || 0;
             var beta = event.beta || 0;
             var gamma = event.gamma || 0;
 
+            // Ajustar sensibilidad
             var rotationY = -gamma * 0.5;
             var rotationX = (beta - 90) * 0.3;
 
+            // Limitar rotación
             rotationY = Math.max(-20, Math.min(20, rotationY));
             rotationX = Math.max(-15, Math.min(15, rotationX));
 
-            var deltaX = Math.abs(rotationX - lastValidRotation.x);
-            var deltaY = Math.abs(rotationY - lastValidRotation.y);
-
-            if (lastValidRotation.x !== 0 && (deltaX > 30 || deltaY > 30)) {
-                return;
-            }
-
-            lastValidRotation.x = rotationX;
-            lastValidRotation.y = rotationY;
-
-            // Actualizar TODOS los modelos, estén donde estén
+            // Aplicar a TODOS los modelos
             models.forEach(function(model) {
                 try {
                     model.setAttribute('rotation', {
@@ -751,7 +600,7 @@ function flu_3d_aframe_functionality() {
                         z: 0
                     });
                 } catch (e) {
-                    // Silencioso si hay error
+                    // Silencioso
                 }
             });
         }
@@ -818,17 +667,35 @@ function flu_3d_aframe_functionality() {
 
             const model = document.createElement('a-gltf-model');
             model.setAttribute('src', modelPath);
-            model.setAttribute('position', '0 1.5 -3');
-            model.setAttribute('rotation', '0 0 0');
+
+            // Ajustar posición y rotación según contexto
+            const isInAtrapado = container.closest('#atrapado');
+            const isInCapturado = container.closest('#capturado');
+
+            let modelY = '1.5'; // Valor por defecto para #captura
+            let modelRotationX = '0'; // Rotación por defecto
+            let context = 'captura';
+
+            if (isInAtrapado) {
+                modelY = '1.5';
+                modelRotationX = '-10'; // Mira un poco hacia abajo
+                context = 'atrapado';
+            } else if (isInCapturado) {
+                modelY = '2.5'; // Más alto
+                modelRotationX = '-20'; // Mira más hacia
+                // abajo para compensar la altura
+                context = 'capturado';
+            }
+
+            console.log('🎨 Creating model in context:', context, 'with Y:', modelY, 'rotX:', modelRotationX);
+
+            model.setAttribute('position', '0 ' + modelY + ' -3');
+            model.setAttribute('rotation', modelRotationX + ' 0 0');
             model.setAttribute('scale', '2 2 2');
 
             scene.appendChild(model);
             scene.appendChild(camera);
-
             container.appendChild(scene);
-
-            const isInCapturado = container.closest('#capturado');
-            const isInAtrapado = container.closest('#atrapado');
 
             if (!isInCapturado && !isInAtrapado) {
                 const randomModelDelay = Math.random() * 1000 + 1000;
@@ -845,4 +712,4 @@ function flu_3d_aframe_functionality() {
     </script>
     <?php
 }
-add_action('wp_footer', 'flu_3d_aframe_functionality', 10);
+add_action('wp_footer', 'flu_3d_aframe_functionality', 1);
