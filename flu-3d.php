@@ -250,6 +250,12 @@ function flu_3d_aframe_functionality() {
 
             capturaLinks.forEach(function(link) {
                 link.addEventListener('click', function(e) {
+                    // Si NO está marcado como geo-checked, dejar que flu-geolocation.php lo maneje primero
+                    if (this.getAttribute('data-geo-checked') !== 'true') {
+                        return; // No hacer nada, dejar pasar al handler de geo
+                    }
+
+                    // Si llegamos aquí, geo ya fue validada
                     e.preventDefault();
                     e.stopPropagation();
 
@@ -839,4 +845,4 @@ function flu_3d_aframe_functionality() {
     </script>
     <?php
 }
-add_action('wp_footer', 'flu_3d_aframe_functionality');
+add_action('wp_footer', 'flu_3d_aframe_functionality', 10);

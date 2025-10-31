@@ -385,35 +385,48 @@ function flu_geo_add_validation_script() {
         return;
     }
 
-    $tolerance_meters = 50;
+    $tolerance_meters = 50; // Default: normal
     switch ( $tolerance ) {
         case 'strict':
             $tolerance_meters = 10;
             break;
+        case 'normal':
+            $tolerance_meters = 50;
+            break;
         case 'amplio':
             $tolerance_meters = 200;
             break;
+        default:
+            $tolerance_meters = 50; // Fallback a normal si no está definido
+            break;
     }
+
+    // Debug: log para verificar qué tolerancia se guardó
+    error_log( 'Flu Geo Debug - Page ID: ' . $post_id . ', Tolerance setting: ' . $tolerance . ', Tolerance meters: ' . $tolerance_meters );
 
     ?>
     <script>
-        console.log('Geo script loading with Google Maps...');
+        console.log('🌍 Geo script loading with Google Maps...');
 
         var targetLat = <?php echo floatval( $latitude ); ?>;
         var targetLng = <?php echo floatval( $longitude ); ?>;
         var tolerance = <?php echo intval( $tolerance_meters ); ?>;
-        var geoChecked = false;
+        var toleranceSetting = '<?php echo esc_js( $tolerance ); ?>'; // strict, normal, amplio
+        var geoCheckInProgress = false;
 
-        console.log('Target coordinates:', targetLat, targetLng);
-        console.log('Tolerance:', tolerance, 'meters');
+        console.log('📍 Target coordinates:', targetLat, targetLng);
+        console.log('📏 Tolerance setting:', toleranceSetting, '→', tolerance, 'meters');
+        console.log('   • strict = 10m');
+        console.log('   • normal = 50m');
+        console.log('   • amplio = 200m');
 
         // Esperar a que Google Maps esté cargado
         function waitForGoogleMaps(callback) {
             if (typeof google !== 'undefined' && typeof google.maps !== 'undefined' && typeof google.maps.geometry !== 'undefined') {
-                console.log('Google Maps API loaded successfully');
+                console.log('✅ Google Maps API loaded successfully');
                 callback();
             } else {
-                console.log('Waiting for Google Maps API...');
+                console.log('⏳ Waiting for Google Maps API...');
                 setTimeout(function() {
                     waitForGoogleMaps(callback);
                 }, 100);
@@ -422,25 +435,31 @@ function flu_geo_add_validation_script() {
 
         function checkGeolocationWithGoogleMaps(callback) {
             if (!navigator.geolocation) {
-                console.error('Geolocation not supported');
+                console.error('❌ Geolocation not supported');
                 if (callback) callback(false);
                 return;
             }
 
-            if (geoChecked) {
-                var isValidated = document.body.classList.contains('geo-validated');
-                if (callback) callback(isValidated);
+            if (geoCheckInProgress) {
+                console.log('⏳ Geo check already in progress...');
                 return;
             }
+
+            geoCheckInProgress = true;
+            console.log('🔍 Requesting user location...');
+
+            // Limpiar clases anteriores para forzar nueva verificación
+            document.body.classList.remove('geo-validated', 'geo-out-of-range', 'geo-error');
 
             // Usar navigator.geolocation pero calcular distancia con Google Maps
             navigator.geolocation.getCurrentPosition(
                 function(position) {
-                    console.log('User position obtained:', position.coords.latitude, position.coords.longitude);
+                    console.log('📱 User position obtained:', position.coords.latitude, position.coords.longitude);
+                    console.log('📊 Accuracy:', position.coords.accuracy, 'meters');
 
                     // Esperar a que Google Maps esté disponible
                     waitForGoogleMaps(function() {
-                        geoChecked = true;
+                        geoCheckInProgress = false;
 
                         var userLat = position.coords.latitude;
                         var userLng = position.coords.longitude;
@@ -453,55 +472,64 @@ function flu_geo_add_validation_script() {
                             ubicacionEspecifica
                         );
 
-                        console.log('Distance calculated with Google Maps:', distance, 'meters');
+                        console.log('📏 Distance calculated with Google Maps:', Math.round(distance), 'meters');
+                        console.log('🎯 Tolerance:', tolerance, 'meters');
+                        console.log('🧮 Result:', distance <= tolerance ? '✅ DENTRO' : '❌ FUERA', '- Distance:', Math.round(distance), 'm, Limit:', tolerance, 'm');
 
                         if (distance <= tolerance) {
                             document.body.classList.add('geo-validated');
+                            document.body.classList.remove('geo-out-of-range', 'geo-error');
 
                             window.dispatchEvent(new CustomEvent('fluGeoValidated', {
                                 detail: { distance: distance, tolerance: tolerance }
                             }));
 
-                            console.log('Location validated!');
+                            console.log('✅ Location validated! Distance:', Math.round(distance), 'm <=', tolerance, 'm');
                             if (callback) callback(true);
                         } else {
                             document.body.classList.add('geo-out-of-range');
+                            document.body.classList.remove('geo-validated', 'geo-error');
 
                             window.dispatchEvent(new CustomEvent('fluGeoOutOfRange', {
                                 detail: { distance: distance, tolerance: tolerance }
                             }));
 
-                            console.log('Location out of range. Distance:', distance, 'Tolerance:', tolerance);
+                            console.log('❌ Location out of range. Distance:', Math.round(distance), 'm >', tolerance, 'm (needs', Math.round(distance - tolerance), 'm closer)');
                             if (callback) callback(false);
                         }
                     });
                 },
                 function(error) {
-                    geoChecked = true;
+                    geoCheckInProgress = false;
                     document.body.classList.add('geo-error');
+                    document.body.classList.remove('geo-validated', 'geo-out-of-range');
 
                     window.dispatchEvent(new CustomEvent('fluGeoError', {
                         detail: { error: error.message }
                     }));
 
-                    console.error('Geolocation error:', error.message);
+                    console.error('❌ Geolocation error:', error.message, 'Code:', error.code);
                     if (callback) callback(false);
                 },
                 {
                     enableHighAccuracy: true,
-                    timeout: 10000,
-                    maximumAge: 0 // Forzar obtener posición fresca
+                    timeout: 15000,
+                    maximumAge: 0 // CRÍTICO: Forzar obtener posición fresca SIEMPRE
                 }
             );
         }
 
         function handleCapturaLinks() {
             var capturaLinks = document.querySelectorAll('a[href="#captura"]');
+            console.log('🔗 Found', capturaLinks.length, 'captura links');
 
             capturaLinks.forEach(function(link) {
                 link.addEventListener('click', function(e) {
+                    // SIEMPRE interceptar y verificar geolocalización CADA VEZ
                     e.preventDefault();
                     e.stopPropagation();
+
+                    console.log('🛑 Intercepting click to check geolocation');
 
                     var originalText = this.textContent;
                     var spinner = '<span class="geo-loading"></span>';
@@ -510,35 +538,48 @@ function flu_geo_add_validation_script() {
 
                     var self = this;
 
-                    // IMPORTANTE: NO interceptar el click aquí
-                    // Dejar que flu-3d.php maneje los permisos de cámara/giroscopio primero
-
-                    // Simplemente verificar geolocalización en segundo plano
+                    // Esperar a que Google Maps esté listo y verificar ubicación
                     waitForGoogleMaps(function() {
                         checkGeolocationWithGoogleMaps(function(isValid) {
-                            // No hacer nada aquí, el click ya fue manejado por flu-3d.php
-                            console.log('Geolocalización verificada:', isValid ? 'OK' : 'Fuera de rango');
+                            console.log('📊 Geo check result:', isValid ? '✅ Valid' : '❌ Invalid');
+
+                            self.innerHTML = originalText;
+                            self.style.pointerEvents = 'auto';
+
+                            if (isValid) {
+                                // Ubicación válida - permitir que flu-3d.php maneje los permisos de cámara
+                                console.log('✅ Location validated, proceeding to camera permissions...');
+
+                                // Marcar temporalmente que ya verificamos la geo PARA ESTE CLICK
+                                self.setAttribute('data-geo-checked', 'true');
+
+                                // Disparar un nuevo click para que flu-3d.php lo capture
+                                setTimeout(function() {
+                                    self.click();
+                                    // Resetear inmediatamente después para que el próximo click vuelva a verificar
+                                    setTimeout(function() {
+                                        self.removeAttribute('data-geo-checked');
+                                    }, 100);
+                                }, 100);
+                            } else {
+                                // Ubicación inválida - ir a localizacion-ko
+                                console.log('❌ Location invalid, redirecting to #localizacion-ko');
+                                window.location.hash = '#localizacion-ko';
+                            }
                         });
                     });
-
-                    // Restaurar el texto después de un momento
-                    setTimeout(function() {
-                        self.innerHTML = originalText;
-                        self.style.pointerEvents = 'auto';
-                    }, 2000);
-
-                    // NO prevenir la navegación, dejar que flu-3d.php la maneje
-                }, false); // NO usar capture, dejar que flu-3d.php capture primero
+                }, true); // Usar capture para interceptar ANTES que flu-3d.php
             });
         }
 
         document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 Geolocation handler initialized');
             handleCapturaLinks();
         });
     </script>
     <?php
 }
-add_action( 'wp_footer', 'flu_geo_add_validation_script' );
+add_action( 'wp_footer', 'flu_geo_add_validation_script', 5 ); // Priority 5 para ejecutar ANTES que flu-3d.php
 
 /**
  * Add CSS for loading animation
