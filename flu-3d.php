@@ -594,7 +594,7 @@ function flu_3d_aframe_functionality() {
             const model = document.createElement('a-gltf-model');
             model.setAttribute('src', modelPath);
             model.setAttribute('position', '0 1.5 -3');
-            model.setAttribute('rotation', '0 180 0');
+            model.setAttribute('rotation', '0 0 0');
             model.setAttribute('scale', '2 2 2');
 
             scene.appendChild(model);
