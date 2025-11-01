@@ -12,6 +12,23 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Add CSS for visited elements
  */
 function flu_core_add_visited_css() {
+    // Add body classes for completed zones
+    $body_classes = array();
+
+    if ( isset( $_COOKIE['arga_completado'] ) && $_COOKIE['arga_completado'] === 'si' ) {
+        $body_classes[] = 'arga-completado';
+    }
+
+    if ( isset( $_COOKIE['ultzama_completado'] ) && $_COOKIE['ultzama_completado'] === 'si' ) {
+        $body_classes[] = 'ultzama-completado';
+    }
+
+    if ( !empty( $body_classes ) ) {
+        add_filter( 'body_class', function( $classes ) use ( $body_classes ) {
+            return array_merge( $classes, $body_classes );
+        } );
+    }
+
     echo '<style>
         .progreso .visited hr.wp-block-separator.has-custom-white-background-color.has-background {
             background-color: var(--wp--preset--color--custom-green) !important;
@@ -37,6 +54,23 @@ function flu_core_add_visited_css() {
         }
         .progreso .captured .capturado {
             display: block;
+        }
+        
+        /* Zone completion badges - hidden by default */
+        .zona-completada-badge,
+        [data-zone-badge] {
+            display: none !important;
+        }
+        
+        /* Show badges when zone is complete */
+        body.arga-completado [data-zone-badge="arga"],
+        body.arga-completado .arga-completado-badge {
+            display: block !important;
+        }
+        
+        body.ultzama-completado [data-zone-badge="ultzama"],
+        body.ultzama-completado .ultzama-completado-badge {
+            display: block !important;
         }
     </style>';
 }
@@ -160,6 +194,115 @@ function flu_core_ajax_track_capture() {
 }
 add_action( 'wp_ajax_flu_core_track_capture', 'flu_core_ajax_track_capture' );
 add_action( 'wp_ajax_nopriv_flu_core_track_capture', 'flu_core_ajax_track_capture' );
+
+/**
+ * AJAX handler to check if all viruses in a zone (arga or ultzama) are captured
+ */
+function flu_core_ajax_check_zone_completion() {
+    // Get all captured pages
+    $cookie_name = 'flu_captured_pages';
+    $captured = [];
+
+    if ( isset( $_COOKIE[ $cookie_name ] ) ) {
+        $captured = json_decode( stripslashes( $_COOKIE[ $cookie_name ] ), true );
+        if ( ! is_array( $captured ) ) {
+            $captured = [];
+        }
+    }
+
+    error_log( '=== ZONE COMPLETION CHECK ===' );
+    error_log( 'Captured pages: ' . print_r( $captured, true ) );
+
+    // Get parent pages
+    $arga_parent = get_page_by_path( 'virus/arga' );
+    $ultzama_parent = get_page_by_path( 'virus/ultzama' );
+
+    if ( ! $arga_parent ) {
+        $arga_parent = get_page_by_path( 'arga' );
+    }
+    if ( ! $ultzama_parent ) {
+        $ultzama_parent = get_page_by_path( 'ultzama' );
+    }
+
+    error_log( 'ARGA parent found: ' . ( $arga_parent ? $arga_parent->ID : 'NO' ) );
+    error_log( 'ULTZAMA parent found: ' . ( $ultzama_parent ? $ultzama_parent->ID : 'NO' ) );
+
+    $expire_time = time() + ( 365 * 24 * 60 * 60 );
+
+    $response = array(
+        'arga_status' => 'incomplete',
+        'ultzama_status' => 'incomplete',
+        'arga_children' => array(),
+        'ultzama_children' => array(),
+        'captured' => $captured
+    );
+
+    // Check ARGA
+    if ( $arga_parent ) {
+        $arga_children = get_posts( array(
+            'post_type' => 'page',
+            'post_parent' => $arga_parent->ID,
+            'post_status' => 'publish',
+            'numberposts' => -1,
+            'fields' => 'ids'
+        ) );
+
+        $response['arga_children'] = $arga_children;
+
+        error_log( 'ARGA children IDs: ' . print_r( $arga_children, true ) );
+        error_log( 'ARGA children count: ' . count( $arga_children ) );
+
+        // Check if all arga viruses are captured
+        $all_arga_captured = !empty($arga_children) && empty(array_diff($arga_children, $captured));
+
+        error_log( 'All ARGA captured: ' . ( $all_arga_captured ? 'YES' : 'NO' ) );
+
+        if ( $all_arga_captured ) {
+            setcookie( 'arga_completado', 'si', $expire_time, '/' );
+            $response['arga_status'] = 'complete';
+            error_log( '✅ ARGA completado - Cookie creada' );
+        } else {
+            $missing = array_diff($arga_children, $captured);
+            error_log( 'ARGA missing IDs: ' . print_r( $missing, true ) );
+        }
+    }
+
+    // Check ULTZAMA
+    if ( $ultzama_parent ) {
+        $ultzama_children = get_posts( array(
+            'post_type' => 'page',
+            'post_parent' => $ultzama_parent->ID,
+            'post_status' => 'publish',
+            'numberposts' => -1,
+            'fields' => 'ids'
+        ) );
+
+        $response['ultzama_children'] = $ultzama_children;
+
+        error_log( 'ULTZAMA children IDs: ' . print_r( $ultzama_children, true ) );
+        error_log( 'ULTZAMA children count: ' . count( $ultzama_children ) );
+
+        // Check if all ultzama viruses are captured
+        $all_ultzama_captured = !empty($ultzama_children) && empty(array_diff($ultzama_children, $captured));
+
+        error_log( 'All ULTZAMA captured: ' . ( $all_ultzama_captured ? 'YES' : 'NO' ) );
+
+        if ( $all_ultzama_captured ) {
+            setcookie( 'ultzama_completado', 'si', $expire_time, '/' );
+            $response['ultzama_status'] = 'complete';
+            error_log( '✅ ULTZAMA completado - Cookie creada' );
+        } else {
+            $missing = array_diff($ultzama_children, $captured);
+            error_log( 'ULTZAMA missing IDs: ' . print_r( $missing, true ) );
+        }
+    }
+
+    error_log( '=== END ZONE COMPLETION CHECK ===' );
+
+    wp_send_json_success( $response );
+}
+add_action( 'wp_ajax_flu_core_check_zone_completion', 'flu_core_ajax_check_zone_completion' );
+add_action( 'wp_ajax_nopriv_flu_core_check_zone_completion', 'flu_core_ajax_check_zone_completion' );
 
 /**
  * Add visited class to elements and track clicks
@@ -310,11 +453,11 @@ function flu_core_add_visited_functionality() {
                     // Actualizar los enlaces después de capturar
                     xhr.onload = function() {
                         if (xhr.status === 200) {
-                            console.log('Virus capturado, actualizando enlaces...');
-                            // Recargar las cookies y actualizar enlaces
+                            console.log('Virus capturado, actualizando enlaces y verificando zonas...');
                             setTimeout(function() {
                                 markVisitedElements();
                                 updateCapturedLinks();
+                                checkZoneCompletion();
                             }, 100);
                         }
                     };
@@ -336,11 +479,11 @@ function flu_core_add_visited_functionality() {
                         // Actualizar los enlaces después de capturar
                         xhr.onload = function() {
                             if (xhr.status === 200) {
-                                console.log('Virus capturado, actualizando enlaces...');
-                                // Recargar las cookies y actualizar enlaces
+                                console.log('Virus capturado, actualizando enlaces y verificando zonas...');
                                 setTimeout(function() {
                                     markVisitedElements();
                                     updateCapturedLinks();
+                                    checkZoneCompletion();
                                 }, 100);
                             }
                         };
@@ -349,11 +492,108 @@ function flu_core_add_visited_functionality() {
             });
         }
 
+        function checkZoneCompletion() {
+            console.log('🔍 Verificando completitud de zonas...');
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '<?php echo admin_url('admin-ajax.php'); ?>');
+            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+
+            const data = 'action=flu_core_check_zone_completion';
+            xhr.send(data);
+
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    try {
+                        const response = JSON.parse(xhr.responseText);
+                        console.log('✅ Respuesta del servidor:', response);
+
+                        if (response.success && response.data) {
+                            const data = response.data;
+
+                            console.log('📊 ARGA:');
+                            console.log('  - Hijos:', data.arga_children);
+                            console.log('  - Estado:', data.arga_status);
+
+                            console.log('📊 ULTZAMA:');
+                            console.log('  - Hijos:', data.ultzama_children);
+                            console.log('  - Estado:', data.ultzama_status);
+
+                            console.log('📊 Capturados:', data.captured);
+                        }
+
+                        // Verificar si se crearon las cookies
+                        const argaCompleto = getCookie('arga_completado');
+                        const ultzamaCompleto = getCookie('ultzama_completado');
+
+                        console.log('🍪 Cookie arga_completado:', argaCompleto || 'no existe');
+                        console.log('🍪 Cookie ultzama_completado:', ultzamaCompleto || 'no existe');
+
+                        if (argaCompleto === 'si') {
+                            console.log('🎉 ¡ARGA COMPLETADO!');
+                            showCompletionBadges('arga');
+                        }
+                        if (ultzamaCompleto === 'si') {
+                            console.log('🎉 ¡ULTZAMA COMPLETADO!');
+                            showCompletionBadges('ultzama');
+                        }
+                    } catch (e) {
+                        console.error('Error parsing response:', e);
+                    }
+                }
+            };
+
+            xhr.onerror = function() {
+                console.error('❌ Error en la petición AJAX');
+            };
+        }
+
+        function showCompletionBadges(zone) {
+            // Buscar elementos que tengan clases o atributos relacionados con la zona
+            console.log('🏅 Mostrando insignias de completitud para:', zone);
+
+            // Buscar por clase (ej: .arga-completado, .ultzama-completado)
+            const badgesByClass = document.querySelectorAll('.' + zone + '-completado');
+            badgesByClass.forEach(function(badge) {
+                badge.style.display = 'block';
+                console.log('  ✓ Mostrando badge por clase:', badge);
+            });
+
+            // Buscar por atributo data (ej: data-zone="arga")
+            const badgesByData = document.querySelectorAll('[data-zone="' + zone + '"]');
+            badgesByData.forEach(function(badge) {
+                badge.style.display = 'block';
+                console.log('  ✓ Mostrando badge por data-zone:', badge);
+            });
+
+            // Buscar imágenes con alt que contenga el nombre de la zona
+            const images = document.querySelectorAll('img[alt*="' + zone + '"]');
+            images.forEach(function(img) {
+                img.style.display = 'block';
+                console.log('  ✓ Mostrando imagen:', img.alt);
+            });
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
             markVisitedElements();
-            updateCapturedLinks(); // NUEVA LÍNEA: Actualizar enlaces al cargar la página
+            updateCapturedLinks();
             trackLinkClicks();
             trackCaptureWhenAtrapado();
+            checkZoneCompletion(); // Verificar al cargar la página
+
+            // Mostrar insignias si las cookies ya existen
+            setTimeout(function() {
+                const argaCompleto = getCookie('arga_completado');
+                const ultzamaCompleto = getCookie('ultzama_completado');
+
+                if (argaCompleto === 'si') {
+                    console.log('🏅 ARGA ya completado, mostrando insignia...');
+                    showCompletionBadges('arga');
+                }
+                if (ultzamaCompleto === 'si') {
+                    console.log('🏅 ULTZAMA ya completado, mostrando insignia...');
+                    showCompletionBadges('ultzama');
+                }
+            }, 500);
         });
     </script>
     <?php
@@ -439,17 +679,20 @@ function flu_core_reset_visited_pages() {
         wp_die( 'Error de seguridad' );
     }
 
-    // Clear progress cookies
-    $cookie_name = 'flu_visited_pages';
-    $captured_cookie_name = 'flu_captured_pages';
-    setcookie( $cookie_name, '', time() - 3600, '/' );
-    setcookie( $captured_cookie_name, '', time() - 3600, '/' );
+    // Clear all cookies
+    $cookies_to_clear = array(
+        'flu_visited_pages',
+        'flu_captured_pages',
+        'flu_permissions',
+        'arga_completado',
+        'ultzama_completado'
+    );
 
-    // Clear permissions cookie
-    $permissions_cookie_name = 'flu_permissions';
-    setcookie( $permissions_cookie_name, '', time() - 3600, '/' );
+    foreach ( $cookies_to_clear as $cookie_name ) {
+        setcookie( $cookie_name, '', time() - 3600, '/' );
+    }
 
-    wp_send_json_success( 'Progreso y permisos reseteados correctamente' );
+    wp_send_json_success( 'Progreso, permisos y logros reseteados correctamente' );
 }
 add_action( 'wp_ajax_flu_core_reset_visited', 'flu_core_reset_visited_pages' );
 add_action( 'wp_ajax_nopriv_flu_core_reset_visited', 'flu_core_reset_visited_pages' );
