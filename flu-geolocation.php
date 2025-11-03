@@ -240,9 +240,9 @@ function flu_geo_meta_box_callback( $post ) {
     echo '<tr>';
     echo '<th scope="row">Tolerancia de ubicación</th>';
     echo '<td>';
-    echo '<label for="flu_geo_tolerance_strict"><input type="radio" id="flu_geo_tolerance_strict" name="flu_geo_tolerance" value="strict" ' . checked( $tolerance, 'strict', false ) . '> Estricta (10m)</label><br>';
+    echo '<label for="flu_geo_tolerance_strict"><input type="radio" id="flu_geo_tolerance_strict" name="flu_geo_tolerance" value="strict" ' . checked( $tolerance, 'strict', false ) . '> Estricta (25m)</label><br>';
     echo '<label for="flu_geo_tolerance_normal"><input type="radio" id="flu_geo_tolerance_normal" name="flu_geo_tolerance" value="normal" ' . checked( $tolerance, 'normal', false ) . '> Normal (50m)</label><br>';
-    echo '<label for="flu_geo_tolerance_amplio"><input type="radio" id="flu_geo_tolerance_amplio" name="flu_geo_tolerance" value="amplio" ' . checked( $tolerance, 'amplio', false ) . '> Amplio (200m)</label><br>';
+    echo '<label for="flu_geo_tolerance_amplio"><input type="radio" id="flu_geo_tolerance_amplio" name="flu_geo_tolerance" value="amplio" ' . checked( $tolerance, 'amplio', false ) . '> Amplio (100m)</label><br>';
     echo '</td>';
     echo '</tr>';
     echo '</table>';
@@ -382,13 +382,13 @@ function flu_geo_add_validation_script() {
     $tolerance_meters = 50;
     switch ( $tolerance ) {
         case 'strict':
-            $tolerance_meters = 10;
+            $tolerance_meters = 25;
             break;
         case 'normal':
             $tolerance_meters = 50;
             break;
         case 'amplio':
-            $tolerance_meters = 200;
+            $tolerance_meters = 100;
             break;
     }
 
