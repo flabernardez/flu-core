@@ -23,7 +23,6 @@ function flu_3d_aframe_functionality() {
     <style>
         .flu-captura {
             position: relative;
-            overflow: hidden;
         }
         .flu-captura video {
             position: absolute;
@@ -34,6 +33,81 @@ function flu_3d_aframe_functionality() {
             object-fit: cover;
             z-index: -1;
         }
+
+        /* Loader de virus con aguja de brújula */
+        .virus-loader {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 100;
+            width: 80%;
+            max-width: 300px;
+            opacity: 1;
+            transition: opacity 0.3s ease-out;
+        }
+
+        .virus-loader.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .virus-loader-text {
+            color: var(--wp--preset--color--custom-white, #fff);
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 30px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        }
+
+        .virus-compass {
+            width: 60px;
+            height: 60px;
+            margin: 0 auto 20px;
+            position: relative;
+        }
+
+        .virus-compass-circle {
+            width: 100%;
+            height: 100%;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            position: relative;
+        }
+
+        .virus-compass-needle {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 3px;
+            height: 25px;
+            background: linear-gradient(to bottom, var(--wp--preset--color--accent, #00ff88), rgba(255,255,255,0.5));
+            transform-origin: center bottom;
+            transform: translate(-50%, -100%);
+            animation: compassSwing 2s ease-in-out infinite;
+            box-shadow: 0 0 10px var(--wp--preset--color--accent, #00ff88);
+        }
+
+        .virus-compass-needle::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 4px solid transparent;
+            border-right: 4px solid transparent;
+            border-bottom: 6px solid var(--wp--preset--color--accent, #00ff88);
+        }
+
+        @keyframes compassSwing {
+            0% { transform: translate(-50%, -100%) rotate(-30deg); }
+            50% { transform: translate(-50%, -100%) rotate(30deg); }
+            100% { transform: translate(-50%, -100%) rotate(-30deg); }
+        }
+
         .flu-captura a-scene {
             position: relative !important;
             z-index: 1;
@@ -44,23 +118,41 @@ function flu_3d_aframe_functionality() {
             margin-top: -100vh;
             pointer-events: none;
             opacity: 0;
-            animation: fadeInModel 0.3s ease-in-out forwards;
+            transition: opacity 0.5s ease-in-out;
         }
+
+        .flu-captura a-scene.loaded {
+            opacity: 1;
+        }
+
         .flu-3d img {
             display: none;
         }
         html.a-fullscreen .flu-captura .a-canvas {
             position: absolute !important;
         }
-        .wp-block-button,
-        a[href*="atrapado"],
-        .flu-captura .wp-block-button a {
+
+        #captura .wp-block-button {
             position: relative !important;
             z-index: 1000 !important;
-            pointer-events: auto !important;
-            opacity: 0;
-            animation: fadeInButton 0.3s ease-in-out forwards;
+            pointer-events: none !important;
         }
+
+        #captura .wp-block-button a {
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+            pointer-events: none;
+        }
+
+        #captura .wp-block-button.visible {
+            pointer-events: auto !important;
+        }
+
+        #captura .wp-block-button.visible a {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
         .flu-captura .a-canvas {
             position: absolute !important;
             pointer-events: none !important;
@@ -69,19 +161,20 @@ function flu_3d_aframe_functionality() {
         #atrapado {
             position: fixed;
             top: 0;
+            left: 0;
             width: 100vw;
-            height: 100%;
+            height: 100vh;
             z-index: -1;
             opacity: 0;
             visibility: hidden;
-            transform: scale(0.9);
             pointer-events: none !important;
-            transition: opacity 0.4s ease-out, transform 0.4s ease-out, visibility 0s 0.4s, z-index 0s 0.4s;
+            transition: opacity 0.4s ease-out, visibility 0s 0.4s, z-index 0s 0.4s;
             overflow-y: auto;
             display: flex;
             align-items: center;
             justify-content: center;
             padding: 20px;
+            background: rgba(0, 0, 0, 0.95);
         }
 
         #atrapado > * {
@@ -91,38 +184,15 @@ function flu_3d_aframe_functionality() {
         }
 
         #atrapado.show {
-            z-index: 2000;
+            z-index: 9999;
             opacity: 1;
             visibility: visible;
-            transform: scale(1);
             pointer-events: auto !important;
-            transition: opacity 0.4s ease-out, transform 0.4s ease-out, visibility 0s, z-index 0s;
+            transition: opacity 0.4s ease-out, visibility 0s, z-index 0s;
         }
 
         #atrapado.show > * {
             pointer-events: auto !important;
-        }
-
-        @keyframes fadeInModel {
-            from {
-                opacity: 0;
-                transform: scale(0.8);
-            }
-            to {
-                opacity: 1;
-                transform: scale(1);
-            }
-        }
-
-        @keyframes fadeInButton {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
         }
     </style>
     <script>
@@ -162,14 +232,12 @@ function flu_3d_aframe_functionality() {
             initializeAtrapado();
             interceptCapturaLinks();
 
-            if (window.location.hash === '#captura') {
-                initializeCameraForCaptura();
-            }
+            // Manejar si se llega directamente a #captura
+            handleCapturaHash();
 
             window.addEventListener('hashchange', function() {
-                if (window.location.hash === '#captura' && !cameraInitialized) {
-                    initializeCameraForCaptura();
-                }
+                // Detectar llegada a #captura desde geolocalización
+                handleCapturaHash();
 
                 if (window.location.hash === '#atrapado') {
                     showAtrapado();
@@ -193,44 +261,61 @@ function flu_3d_aframe_functionality() {
         });
 
         function interceptCapturaLinks() {
-            var capturaLinks = document.querySelectorAll('a[href="#captura"]');
-
-            capturaLinks.forEach(function(link) {
-                link.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-
-                    if (typeof DeviceOrientationEvent !== 'undefined' &&
-                        typeof DeviceOrientationEvent.requestPermission === 'function') {
-
-                        DeviceOrientationEvent.requestPermission()
-                            .then(function(response) {
-                                if (response === 'granted') {
-                                    requestCameraAndNavigate();
-                                } else {
-                                    alert('Necesitas activar el sensor de movimiento para ver el modelo en AR');
-                                }
-                            })
-                            .catch(function(error) {
-                                alert('Error: ' + error.message);
-                            });
-                    } else {
-                        requestCameraAndNavigate();
-                    }
-                }, true);
-            });
+            // Los links #captura ya no piden permisos directamente
+            // Los permisos se piden cuando se llega a #captura tras validar geolocalización
         }
 
-        function requestCameraAndNavigate() {
+        // Detectar cuando se llega a #captura (tras validación de geolocalización)
+        function handleCapturaHash() {
+            // SOLO pedir permisos si llegamos desde una geolocalización validada
+            // o si ya estábamos inicializados
+            if (window.location.hash === '#captura' && !cameraInitialized) {
+                // Verificar que venimos de una validación correcta
+                if (document.body.classList.contains('geo-validated') || cameraInitialized) {
+                    console.log('Llegando a #captura - Solicitando permisos de cámara y giroscopio');
+                    requestCameraAndGyroscopePermissions();
+                } else {
+                    console.log('Acceso directo a #captura sin validación - Redirigiendo a #presentacion');
+                    window.location.hash = 'presentacion';
+                }
+            }
+        }
+
+        function requestCameraAndGyroscopePermissions() {
+            // Primero pedir permiso de giroscopio en iOS
+            if (typeof DeviceOrientationEvent !== 'undefined' &&
+                typeof DeviceOrientationEvent.requestPermission === 'function') {
+
+                DeviceOrientationEvent.requestPermission()
+                    .then(function(response) {
+                        if (response === 'granted') {
+                            requestCameraAndInitialize();
+                        } else {
+                            alert('Necesitas activar el sensor de movimiento para ver el modelo en AR');
+                        }
+                    })
+                    .catch(function(error) {
+                        console.error('Error requesting orientation permission:', error);
+                        requestCameraAndInitialize(); // Intentar de todas formas
+                    });
+            } else {
+                requestCameraAndInitialize();
+            }
+        }
+
+        function requestCameraAndInitialize() {
             navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
                 .then(function(stream) {
+                    // Detener el stream inmediatamente, solo necesitamos el permiso
                     stream.getTracks().forEach(function(track) {
                         track.stop();
                     });
 
-                    window.location.hash = '#captura';
+                    console.log('Permisos concedidos - Inicializando captura');
+                    initializeCameraForCaptura();
                 })
                 .catch(function(error) {
+                    console.error('Error al acceder a la cámara:', error);
                     alert('Error al acceder a la cámara: ' + error.message);
                 });
         }
@@ -254,14 +339,12 @@ function flu_3d_aframe_functionality() {
         function showAtrapado() {
             var atrapado = document.getElementById('atrapado');
             if (atrapado) {
-                window.scrollTo(0, 0);
-
                 setTimeout(function() {
                     atrapado.classList.add('show');
                     atrapado.style.pointerEvents = 'auto';
                     atrapado.style.visibility = 'visible';
                     atrapado.style.opacity = '1';
-                    atrapado.style.zIndex = '2000';
+                    atrapado.style.zIndex = '9999';
 
                     var allChildren = atrapado.querySelectorAll('*');
                     allChildren.forEach(function(child) {
@@ -508,6 +591,10 @@ function flu_3d_aframe_functionality() {
         }
 
         function createBasicAFrameScene(container) {
+            // Crear el loader con aguja de brújula
+            const loader = createVirusLoader();
+            container.appendChild(loader);
+
             const scene = document.createElement('a-scene');
             scene.setAttribute('vr-mode-ui', 'enabled: false');
             scene.setAttribute('device-orientation-permission-ui', 'enabled: false');
@@ -551,9 +638,29 @@ function flu_3d_aframe_functionality() {
             scene.appendChild(camera);
 
             container.appendChild(scene);
+
+            // Delay random entre 3-5 segundos
+            const randomDelay = Math.random() * 2000 + 3000; // 3000-5000ms
+
+            setTimeout(function() {
+                loader.classList.add('hidden');
+                scene.classList.add('loaded');
+
+                // Mostrar botón 1 segundo después de que aparezca el modelo
+                setTimeout(function() {
+                    const buttons = container.querySelectorAll('.wp-block-button');
+                    buttons.forEach(function(btn) {
+                        btn.classList.add('visible');
+                    });
+                }, 1000);
+            }, randomDelay);
         }
 
         function createModelAFrameScene(container, modelPath) {
+            // Detectar si estamos en #capturado (virus ya atrapado)
+            const isCapturado = window.location.hash === '#capturado' ||
+                container.closest('#capturado') !== null;
+
             const scene = document.createElement('a-scene');
             scene.setAttribute('vr-mode-ui', 'enabled: false');
             scene.setAttribute('device-orientation-permission-ui', 'enabled: false');
@@ -569,24 +676,76 @@ function flu_3d_aframe_functionality() {
 
             const model = document.createElement('a-gltf-model');
             model.setAttribute('src', modelPath);
-            model.setAttribute('position', '0 1.5 -3');
-            model.setAttribute('rotation', '0 0 0');  // Empieza mirando al frente
-            model.setAttribute('scale', '2 2 2');
+
+            if (isCapturado) {
+                // En #capturado: posición más arriba
+                model.setAttribute('position', '0 2.5 -3');
+                model.setAttribute('scale', '2 2 2');
+            } else {
+                // En #captura: posición actual
+                model.setAttribute('position', '0 1.5 -3');
+                model.setAttribute('scale', '2 2 2');
+            }
+
+            model.setAttribute('rotation', '0 0 0');
 
             scene.appendChild(model);
             scene.appendChild(camera);
 
             container.appendChild(scene);
 
-            const randomModelDelay = Math.random() * 1000 + 1000;
-            const buttonDelay = randomModelDelay + 500;
+            if (isCapturado) {
+                // En #capturado: sin loader, modelo aparece inmediatamente
+                scene.classList.add('loaded');
+                // Activar giroscopio si no está ya inicializado
+                if (!gyroscopeInitialized) {
+                    enableGyroscope();
+                }
+            } else {
+                // En #captura: con loader y delay
+                const loader = createVirusLoader();
+                container.insertBefore(loader, scene);
 
-            scene.style.animationDelay = randomModelDelay + 'ms';
+                const randomDelay = Math.random() * 2000 + 3000; // 3000-5000ms
 
-            const buttons = container.querySelectorAll('.wp-block-button, a[href*="atrapado"]');
-            buttons.forEach(function(button) {
-                button.style.animationDelay = buttonDelay + 'ms';
-            });
+                setTimeout(function() {
+                    loader.classList.add('hidden');
+                    scene.classList.add('loaded');
+
+                    // Mostrar botón 1 segundo después de que aparezca el modelo
+                    setTimeout(function() {
+                        const buttons = container.querySelectorAll('.wp-block-button');
+                        buttons.forEach(function(btn) {
+                            btn.classList.add('visible');
+                        });
+                    }, 1000);
+                }, randomDelay);
+            }
+        }
+
+        function createVirusLoader() {
+            const loader = document.createElement('div');
+            loader.className = 'virus-loader';
+
+            const text = document.createElement('div');
+            text.className = 'virus-loader-text';
+            text.textContent = 'Localizando virus';
+
+            const compass = document.createElement('div');
+            compass.className = 'virus-compass';
+
+            const circle = document.createElement('div');
+            circle.className = 'virus-compass-circle';
+
+            const needle = document.createElement('div');
+            needle.className = 'virus-compass-needle';
+
+            circle.appendChild(needle);
+            compass.appendChild(circle);
+            loader.appendChild(text);
+            loader.appendChild(compass);
+
+            return loader;
         }
     </script>
     <?php

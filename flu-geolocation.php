@@ -412,48 +412,73 @@ function flu_geo_add_validation_script() {
             }
         }
 
-        function checkGeolocationAndNavigate(linkElement) {
+        function checkGeolocationOnly(linkElement) {
             if (!navigator.geolocation) {
                 console.error('Geolocation not supported');
-                restoreButton(linkElement);
-                window.location.hash = '#localizacion-ko';
+                document.body.classList.remove('geo-checking');
+                // Navegar e ir a la sección
+                window.location.hash = 'localizacion-ko';
+                setTimeout(function() {
+                    var section = document.getElementById('localizacion-ko');
+                    if (section) section.scrollIntoView();
+                }, 100);
                 return;
             }
 
             console.log('Requesting geolocation...');
+
+            // Añadir delay ficticio de 2-3 segundos (random)
+            var fakeDelay = Math.random() * 1000 + 2000; // 2000-3000ms
+            var startTime = Date.now();
 
             navigator.geolocation.getCurrentPosition(
                 function(position) {
                     console.log('User position obtained:', position.coords.latitude, position.coords.longitude);
                     console.log('Accuracy:', position.coords.accuracy, 'meters');
 
-                    waitForGoogleMaps(function() {
-                        var userLat = position.coords.latitude;
-                        var userLng = position.coords.longitude;
+                    // Calcular cuánto tiempo falta para completar el delay ficticio
+                    var elapsed = Date.now() - startTime;
+                    var remainingDelay = Math.max(0, fakeDelay - elapsed);
 
-                        var ubicacionEspecifica = new google.maps.LatLng(targetLat, targetLng);
-                        var ubicacionActual = new google.maps.LatLng(userLat, userLng);
-                        var distance = google.maps.geometry.spherical.computeDistanceBetween(
-                            ubicacionActual,
-                            ubicacionEspecifica
-                        );
+                    setTimeout(function() {
+                        waitForGoogleMaps(function() {
+                            var userLat = position.coords.latitude;
+                            var userLng = position.coords.longitude;
 
-                        console.log('Distance calculated:', distance, 'meters');
+                            var ubicacionEspecifica = new google.maps.LatLng(targetLat, targetLng);
+                            var ubicacionActual = new google.maps.LatLng(userLat, userLng);
+                            var distance = google.maps.geometry.spherical.computeDistanceBetween(
+                                ubicacionActual,
+                                ubicacionEspecifica
+                            );
 
-                        restoreButton(linkElement);
+                            console.log('Distance calculated:', distance, 'meters');
 
-                        if (distance <= tolerance) {
-                            console.log('Location validated! Going to #captura');
-                            document.body.classList.add('geo-validated');
-                            document.body.classList.remove('geo-out-of-range');
-                            window.location.hash = '#captura';
-                        } else {
-                            console.log('Location out of range. Distance:', distance, '- Going to #localizacion-ko');
-                            document.body.classList.add('geo-out-of-range');
-                            document.body.classList.remove('geo-validated');
-                            window.location.hash = '#localizacion-ko';
-                        }
-                    });
+                            document.body.classList.remove('geo-checking');
+
+                            if (distance <= tolerance) {
+                                console.log('Location validated! Going to #captura');
+                                document.body.classList.add('geo-validated');
+                                document.body.classList.remove('geo-out-of-range');
+                                // Navegar e ir a la sección
+                                window.location.hash = 'captura';
+                                setTimeout(function() {
+                                    var section = document.getElementById('captura');
+                                    if (section) section.scrollIntoView();
+                                }, 100);
+                            } else {
+                                console.log('Location out of range. Distance:', distance, '- Going to #localizacion-ko');
+                                document.body.classList.add('geo-out-of-range');
+                                document.body.classList.remove('geo-validated');
+                                // Navegar e ir a la sección
+                                window.location.hash = 'localizacion-ko';
+                                setTimeout(function() {
+                                    var section = document.getElementById('localizacion-ko');
+                                    if (section) section.scrollIntoView();
+                                }, 100);
+                            }
+                        });
+                    }, remainingDelay);
                 },
                 function(error) {
                     var errorMessages = {
@@ -463,13 +488,25 @@ function flu_geo_add_validation_script() {
                     };
 
                     console.error('Geolocation error:', error.code, errorMessages[error.code] || error.message);
-                    restoreButton(linkElement);
-                    window.location.hash = '#localizacion-ko';
+
+                    // Esperar el delay mínimo incluso en caso de error
+                    var elapsed = Date.now() - startTime;
+                    var remainingDelay = Math.max(0, fakeDelay - elapsed);
+
+                    setTimeout(function() {
+                        document.body.classList.remove('geo-checking');
+                        // Navegar e ir a la sección
+                        window.location.hash = 'localizacion-ko';
+                        setTimeout(function() {
+                            var section = document.getElementById('localizacion-ko');
+                            if (section) section.scrollIntoView();
+                        }, 100);
+                    }, remainingDelay);
                 },
                 {
-                    enableHighAccuracy: true,
+                    enableHighAccuracy: true,  // Forzar GPS de alta precisión
                     timeout: 30000,
-                    maximumAge: 0
+                    maximumAge: 0  // NUNCA usar caché, siempre lectura nueva
                 }
             );
         }
@@ -489,13 +526,17 @@ function flu_geo_add_validation_script() {
                     e.preventDefault();
                     e.stopPropagation();
 
+                    // Marcar que estamos verificando ubicación
+                    document.body.classList.add('geo-checking');
+
                     this.setAttribute('data-original-text', this.textContent);
 
                     var spinner = '<span class="geo-loading"></span>';
                     this.innerHTML = 'Verificando ubicación...' + spinner;
                     this.style.pointerEvents = 'none';
 
-                    checkGeolocationAndNavigate(this);
+                    // SIEMPRE pedir geolocalización con maximumAge: 0 para forzar nueva lectura
+                    checkGeolocationOnly(this);
 
                 }, true);
             });
@@ -510,10 +551,24 @@ function flu_geo_add_validation_script() {
                 if (koSection) {
                     if (hash === '#localizacion-ko') {
                         koSection.style.display = 'block';
-                        koSection.scrollIntoView({ behavior: 'smooth' });
                     } else {
                         koSection.style.display = 'none';
                     }
+                }
+
+                // Si volvemos a #presentacion desde cualquier lado, resetear todo
+                if (hash === '#presentacion' || hash === '') {
+                    document.body.classList.remove('geo-checking', 'geo-validated', 'geo-out-of-range');
+
+                    // Resetear todos los botones que van a #captura
+                    var capturaLinks = document.querySelectorAll('a[href="#captura"]');
+                    capturaLinks.forEach(function(link) {
+                        var originalText = link.getAttribute('data-original-text');
+                        if (originalText) {
+                            link.innerHTML = originalText;
+                        }
+                        link.style.pointerEvents = 'auto';
+                    });
                 }
             }
 
