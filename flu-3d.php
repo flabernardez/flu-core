@@ -185,6 +185,9 @@ function flu_3d_aframe_functionality() {
 
         #atrapado.show {
             z-index: 9999;
+            width: 100vw;
+            margin: 0;
+            background: transparent;
             opacity: 1;
             visibility: visible;
             pointer-events: auto !important;
@@ -194,21 +197,97 @@ function flu_3d_aframe_functionality() {
         #atrapado.show > * {
             pointer-events: auto !important;
         }
+
+        /* Modal para activar giroscopio */
+        .gyro-activate-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            padding: 0;
+        }
+
+        .gyro-activate-overlay.hidden {
+            display: none;
+        }
+
+        .gyro-activate-modal {
+            background: var(--wp--preset--color--base, #fff);
+            border-radius: 16px;
+            padding: 32px 24px;
+            max-width: 320px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .gyro-activate-text {
+            color: var(--wp--preset--color--contrast, #000);
+            font-size: 16px;
+            line-height: 1.5;
+            margin-bottom: 24px;
+            font-weight: 500;
+        }
+
+        .gyro-activate-button {
+            background: var(--wp--preset--color--accent, #00ff88);
+            color: var(--wp--preset--color--base, #000);
+            border: none;
+            padding: 16px 32px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            touch-action: manipulation;
+            width: 100%;
+            transition: transform 0.1s ease;
+        }
+
+        .gyro-activate-button:active {
+            transform: scale(0.98);
+        }
     </style>
     <script>
         var cameraInitialized = false;
         var gyroscopeInitialized = false;
         var capturaContainers = [];
 
-        // Smoothed rotation values - modelo mirando al frente (Y = 0)
+        // Smoothed rotation values
         var currentRotation = { x: 0, y: 0, z: 0 };
         var targetRotation = { x: 0, y: 0, z: 0 };
         var smoothingFactor = 0.12;
         var animationFrameId = null;
         var sensorActive = false;
-
-        // Para detectar saltos bruscos en beta (vertical)
         var lastBeta = null;
+
+        function getCookie(name) {
+            const value = "; " + document.cookie;
+            const parts = value.split("; " + name + "=");
+            if (parts.length === 2) return parts.pop().split(";").shift();
+            return null;
+        }
+
+        function setCookie(name, value, days) {
+            const expires = new Date();
+            expires.setTime(expires.getTime() + (days * 24 * 60 * 60 * 1000));
+            document.cookie = name + "=" + value + ";expires=" + expires.toUTCString() + ";path=/";
+        }
+
+        function hasGyroPermission() {
+            return getCookie('flu_gyro_permission') === 'granted';
+        }
+
+        function saveGyroPermission() {
+            setCookie('flu_gyro_permission', 'granted', 365); // 1 año
+            console.log('✅ Permiso de giroscopio guardado en cookie');
+        }
 
         document.addEventListener('DOMContentLoaded', function() {
             const capturaDivs = document.querySelectorAll('.flu-captura');
@@ -216,44 +295,35 @@ function flu_3d_aframe_functionality() {
             capturaDivs.forEach(function(div) {
                 capturaContainers.push(div);
 
-                // Solo crear escenas automáticamente para #capturado
-                // En #captura, las escenas se crean después de pedir cámara
                 const isInCapturado = div.closest('#capturado') !== null;
                 const isInCaptura = div.closest('#captura') !== null;
 
                 if (isInCapturado) {
-                    // Estamos en #capturado - crear sin loader
+                    console.log('📍 Encontrado .flu-captura en #capturado');
                     const flu3dImg = div.querySelector('.flu-3d img');
                     if (flu3dImg && flu3dImg.src) {
                         const imgSrc = flu3dImg.src;
                         const fileName = imgSrc.split('/').pop().split('.')[0];
                         const modelPath = '/wp-content/uploads/' + fileName + '.glb';
                         flu3dImg.style.display = 'none';
-                        createModelAFrameScene(div, modelPath);
+                        createModelAFrameSceneForCapturado(div, modelPath);
                     }
                 } else if (!isInCaptura) {
-                    // No estamos ni en #captura ni en #capturado
-                    // Por si acaso hay otros contenedores
                     const flu3dImg = div.querySelector('.flu-3d img');
                     if (flu3dImg && flu3dImg.src) {
                         const imgSrc = flu3dImg.src;
                         const fileName = imgSrc.split('/').pop().split('.')[0];
                         const modelPath = '/wp-content/uploads/' + fileName + '.glb';
                         flu3dImg.style.display = 'none';
-                        createModelAFrameScene(div, modelPath);
+                        createModelAFrameSceneForCapturado(div, modelPath);
                     }
                 }
-                // Si isInCaptura === true, no hacer nada aquí, se creará después
             });
 
             initializeAtrapado();
-            interceptCapturaLinks();
-
-            // Manejar si se llega directamente a #captura
             handleCapturaHash();
 
             window.addEventListener('hashchange', function() {
-                // Detectar llegada a #captura desde geolocalización
                 handleCapturaHash();
 
                 if (window.location.hash === '#atrapado') {
@@ -277,62 +347,99 @@ function flu_3d_aframe_functionality() {
             }
         });
 
-        function interceptCapturaLinks() {
-            // Los links #captura ya no piden permisos directamente
-            // Los permisos se piden cuando se llega a #captura tras validar geolocalización
-        }
-
-        // Detectar cuando se llega a #captura (tras validación de geolocalización)
         function handleCapturaHash() {
-            // SOLO pedir permisos si llegamos desde una geolocalización validada
-            // o si ya estábamos inicializados
             if (window.location.hash === '#captura' && !cameraInitialized) {
-                // Verificar que venimos de una validación correcta
                 if (document.body.classList.contains('geo-validated') || cameraInitialized) {
-                    console.log('Llegando a #captura - Solicitando permisos de cámara y giroscopio');
+                    console.log('📍 Llegando a #captura - Solicitando permisos');
                     requestCameraAndGyroscopePermissions();
                 } else {
-                    console.log('Acceso directo a #captura sin validación - Redirigiendo a #presentacion');
+                    console.log('⚠️ Acceso directo sin validación');
                     window.location.hash = 'presentacion';
                 }
             }
         }
 
         function requestCameraAndGyroscopePermissions() {
-            // Primero pedir permiso de giroscopio en iOS
+            console.log('🎯 Iniciando solicitud de permisos');
+
             if (typeof DeviceOrientationEvent !== 'undefined' &&
                 typeof DeviceOrientationEvent.requestPermission === 'function') {
 
-                DeviceOrientationEvent.requestPermission()
-                    .then(function(response) {
-                        if (response === 'granted') {
+                // Verificar si ya tenemos el permiso guardado
+                if (hasGyroPermission()) {
+                    console.log('✅ Permiso ya concedido previamente (cookie)');
+                    requestCameraAndInitialize();
+                    return;
+                }
+
+                console.log('🔐 iOS - Mostrando modal para activar');
+                showGyroActivateButton(function() {
+                    // Este callback se ejecuta cuando el usuario toca el botón
+                    DeviceOrientationEvent.requestPermission()
+                        .then(function(response) {
+                            console.log('📱 Respuesta:', response);
+                            if (response === 'granted') {
+                                console.log('✅ Permiso concedido');
+                                saveGyroPermission(); // Guardar en cookie
+                                requestCameraAndInitialize();
+                            } else {
+                                console.log('❌ Permiso denegado');
+                                alert('Necesitas activar el sensor de movimiento');
+                            }
+                        })
+                        .catch(function(error) {
+                            console.error('❌ Error:', error);
                             requestCameraAndInitialize();
-                        } else {
-                            alert('Necesitas activar el sensor de movimiento para ver el modelo en AR');
-                        }
-                    })
-                    .catch(function(error) {
-                        console.error('Error requesting orientation permission:', error);
-                        requestCameraAndInitialize(); // Intentar de todas formas
-                    });
+                        });
+                });
             } else {
+                console.log('📱 Android - No requiere permiso');
                 requestCameraAndInitialize();
             }
         }
 
+        function showGyroActivateButton(callback) {
+            const overlay = document.createElement('div');
+            overlay.className = 'gyro-activate-overlay';
+
+            const modal = document.createElement('div');
+            modal.className = 'gyro-activate-modal';
+
+            const text = document.createElement('div');
+            text.className = 'gyro-activate-text';
+            text.textContent = 'Para ver el virus en 3D necesitamos activar el sensor de movimiento';
+
+            const button = document.createElement('button');
+            button.className = 'gyro-activate-button';
+            button.textContent = 'Activar';
+
+            modal.appendChild(text);
+            modal.appendChild(button);
+            overlay.appendChild(modal);
+            document.body.appendChild(overlay);
+
+            button.addEventListener('click', function() {
+                console.log('👆 Usuario tocó el botón');
+                overlay.classList.add('hidden');
+                setTimeout(function() {
+                    document.body.removeChild(overlay);
+                }, 300);
+                callback();
+            });
+        }
+
         function requestCameraAndInitialize() {
+            console.log('📸 Pidiendo cámara');
             navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
                 .then(function(stream) {
-                    // Detener el stream inmediatamente, solo necesitamos el permiso
                     stream.getTracks().forEach(function(track) {
                         track.stop();
                     });
-
-                    console.log('Permisos concedidos - Inicializando captura');
+                    console.log('✅ Cámara OK');
                     initializeCameraForCaptura();
                 })
                 .catch(function(error) {
-                    console.error('Error al acceder a la cámara:', error);
+                    console.error('❌ Error cámara:', error);
                     alert('Error al acceder a la cámara: ' + error.message);
                 });
         }
@@ -393,12 +500,10 @@ function flu_3d_aframe_functionality() {
         function initializeCameraForCaptura() {
             if (cameraInitialized) return;
 
-            console.log('Inicializando cámara y escenas 3D...');
+            console.log('📸 Inicializando cámara');
 
-            // PRIMERO: Pedir permisos de cámara
             capturaContainers.forEach(function(container) {
                 requestCameraPermission(container, function() {
-                    // DESPUÉS: Crear la escena con loader
                     const flu3dImg = container.querySelector('.flu-3d img');
 
                     if (flu3dImg && flu3dImg.src) {
@@ -413,6 +518,7 @@ function flu_3d_aframe_functionality() {
             });
 
             cameraInitialized = true;
+            console.log('🎯 Activando giroscopio');
             enableGyroscope();
         }
 
@@ -431,30 +537,24 @@ function flu_3d_aframe_functionality() {
                     video.srcObject = stream;
                     container.appendChild(video);
 
-                    console.log('Cámara activada');
-
-                    // Ejecutar callback después de activar cámara
                     if (callback) {
                         setTimeout(callback, 100);
                     }
                 })
                 .catch(function(error) {
-                    console.error('Error al acceder a la cámara:', error);
+                    console.error('❌ Error cámara:', error);
                     if (callback) callback();
                 });
         }
 
-        // Smoothed animation loop
         function startSmoothAnimation() {
             if (animationFrameId) return;
 
             function animate() {
-                // Interpolate current rotation towards target
                 currentRotation.x += (targetRotation.x - currentRotation.x) * smoothingFactor;
                 currentRotation.y += (targetRotation.y - currentRotation.y) * smoothingFactor;
                 currentRotation.z += (targetRotation.z - currentRotation.z) * smoothingFactor;
 
-                // Apply to all models
                 const models = document.querySelectorAll('a-gltf-model, a-box, a-sphere');
                 models.forEach(function(model) {
                     model.setAttribute('rotation', {
@@ -471,19 +571,22 @@ function flu_3d_aframe_functionality() {
         }
 
         function enableGyroscope() {
-            if (gyroscopeInitialized) return;
-            gyroscopeInitialized = true;
-
             startSmoothAnimation();
 
-            // Try RelativeOrientationSensor first, then fallback
+            if (gyroscopeInitialized) {
+                console.log('⚠️ Giroscopio ya inicializado');
+                return;
+            }
+
+            gyroscopeInitialized = true;
+            console.log('✅ Inicializando giroscopio');
+
             if ('RelativeOrientationSensor' in window) {
                 tryRelativeSensorAPI();
             } else if ('AbsoluteOrientationSensor' in window) {
                 tryAbsoluteSensorAPI();
             } else if (window.DeviceOrientationEvent) {
                 window.addEventListener('deviceorientation', handleOrientation);
-                console.log('Using deviceorientation fallback');
             }
         }
 
@@ -499,7 +602,6 @@ function flu_3d_aframe_functionality() {
 
                     const [x, y, z, w] = q;
 
-                    // Convert quaternion to euler angles
                     const sinp = 2 * (w * x + y * z);
                     const pitch = Math.abs(sinp) >= 1 ?
                         Math.sign(sinp) * Math.PI / 2 :
@@ -517,24 +619,23 @@ function flu_3d_aframe_functionality() {
                     const yawDeg = yaw * (180 / Math.PI);
                     const rollDeg = roll * (180 / Math.PI);
 
-                    // Modelo mirando al frente (sin los 180 extra)
                     targetRotation.x = Math.max(-15, Math.min(15, pitchDeg * 0.3));
                     targetRotation.y = yawDeg * 0.5;
                     targetRotation.z = Math.max(-10, Math.min(10, -rollDeg * 0.2));
                 });
 
                 sensor.addEventListener('error', function(e) {
-                    console.log('RelativeOrientationSensor error, falling back:', e.error);
+                    console.log('❌ RelativeOrientationSensor error:', e.error);
                     sensorActive = false;
                     tryAbsoluteSensorAPI();
                 });
 
                 sensor.start();
                 sensorActive = 'relative';
-                console.log('Using RelativeOrientationSensor');
+                console.log('✅ RelativeOrientationSensor');
 
             } catch (error) {
-                console.log('RelativeOrientationSensor not available:', error);
+                console.log('❌ RelativeOrientationSensor N/A');
                 tryAbsoluteSensorAPI();
             }
         }
@@ -574,54 +675,40 @@ function flu_3d_aframe_functionality() {
                 });
 
                 sensor.addEventListener('error', function(e) {
-                    console.log('AbsoluteOrientationSensor error, falling back:', e.error);
+                    console.log('❌ AbsoluteOrientationSensor error:', e.error);
                     sensorActive = false;
                     window.addEventListener('deviceorientation', handleOrientation);
                 });
 
                 sensor.start();
                 sensorActive = 'absolute';
-                console.log('Using AbsoluteOrientationSensor');
+                console.log('✅ AbsoluteOrientationSensor');
 
             } catch (error) {
-                console.log('AbsoluteOrientationSensor not available:', error);
+                console.log('❌ AbsoluteOrientationSensor N/A');
                 window.addEventListener('deviceorientation', handleOrientation);
+                console.log('✅ deviceorientation fallback');
             }
         }
 
         function handleOrientation(event) {
-            var beta = event.beta;   // -180 to 180 (front/back tilt)
-            var gamma = event.gamma || 0; // -90 to 90 (left/right tilt)
+            var beta = event.beta;
+            var gamma = event.gamma || 0;
 
-            // Manejar el caso cuando beta es null o undefined
-            if (beta === null || beta === undefined) {
-                return;
-            }
+            if (beta === null || beta === undefined) return;
 
-            // Normalizar beta para evitar saltos en los extremos
-            // Cuando el móvil está boca arriba, beta salta de 90 a -90 o viceversa
-            // Limitamos el rango útil a -90 a 90 (móvil en posición vertical normal)
-            if (beta > 90) {
-                beta = 90;
-            } else if (beta < -90) {
-                beta = -90;
-            }
+            if (beta > 90) beta = 90;
+            else if (beta < -90) beta = -90;
 
-            // Detectar y filtrar saltos bruscos
             if (lastBeta !== null) {
                 var deltaBeta = Math.abs(beta - lastBeta);
-                // Si hay un salto mayor a 45 grados en un frame, ignorar
-                if (deltaBeta > 45) {
-                    return;
-                }
+                if (deltaBeta > 45) return;
             }
             lastBeta = beta;
 
-            // Calcular rotación - móvil vertical (beta=90) = modelo recto (x=0)
             var rotationX = (beta - 90) * 0.2;
             var rotationY = -gamma * 0.4;
 
-            // Clamp values más restrictivo para evitar movimientos extremos
             rotationX = Math.max(-12, Math.min(12, rotationX));
             rotationY = Math.max(-15, Math.min(15, rotationY));
 
@@ -631,7 +718,6 @@ function flu_3d_aframe_functionality() {
         }
 
         function createBasicAFrameSceneWithLoader(container) {
-            // Crear el loader con aguja de brújula PRIMERO
             const loader = createVirusLoader();
             container.appendChild(loader);
 
@@ -679,14 +765,12 @@ function flu_3d_aframe_functionality() {
 
             container.appendChild(scene);
 
-            // Delay random entre 2-3 segundos
-            const randomDelay = Math.random() * 1000 + 2000; // 2000-3000ms
+            const randomDelay = Math.random() * 1000 + 2000;
 
             setTimeout(function() {
                 loader.classList.add('hidden');
                 scene.classList.add('loaded');
 
-                // Mostrar botón 1 segundo después de que aparezca el modelo
                 setTimeout(function() {
                     const buttons = container.querySelectorAll('.wp-block-button');
                     buttons.forEach(function(btn) {
@@ -697,7 +781,6 @@ function flu_3d_aframe_functionality() {
         }
 
         function createModelAFrameSceneWithLoader(container, modelPath) {
-            // SOLO para #captura: con loader y delay
             const loader = createVirusLoader();
             container.appendChild(loader);
 
@@ -725,13 +808,12 @@ function flu_3d_aframe_functionality() {
 
             container.appendChild(scene);
 
-            const randomDelay = Math.random() * 1000 + 2000; // 2000-3000ms
+            const randomDelay = Math.random() * 1000 + 2000;
 
             setTimeout(function() {
                 loader.classList.add('hidden');
                 scene.classList.add('loaded');
 
-                // Mostrar botón 1 segundo después de que aparezca el modelo
                 setTimeout(function() {
                     const buttons = container.querySelectorAll('.wp-block-button');
                     buttons.forEach(function(btn) {
@@ -741,8 +823,7 @@ function flu_3d_aframe_functionality() {
             }, randomDelay);
         }
 
-        function createModelAFrameScene(container, modelPath) {
-            // Para #capturado: sin loader, aparece inmediatamente
+        function createModelAFrameSceneForCapturado(container, modelPath) {
             const scene = document.createElement('a-scene');
             scene.setAttribute('vr-mode-ui', 'enabled: false');
             scene.setAttribute('device-orientation-permission-ui', 'enabled: false');
@@ -769,9 +850,40 @@ function flu_3d_aframe_functionality() {
 
             scene.classList.add('loaded');
 
-            // Activar giroscopio si no está ya inicializado
             if (!gyroscopeInitialized) {
-                enableGyroscope();
+                if (typeof DeviceOrientationEvent !== 'undefined' &&
+                    typeof DeviceOrientationEvent.requestPermission === 'function') {
+
+                    // Verificar si ya tenemos el permiso guardado
+                    if (hasGyroPermission()) {
+                        console.log('✅ Permiso ya concedido previamente en #capturado (cookie)');
+                        enableGyroscope();
+                        return;
+                    }
+
+                    console.log('🔐 iOS - Mostrando modal para #capturado');
+                    setTimeout(function() {
+                        showGyroActivateButton(function() {
+                            DeviceOrientationEvent.requestPermission()
+                                .then(function(response) {
+                                    console.log('📱 Respuesta en #capturado:', response);
+                                    if (response === 'granted') {
+                                        console.log('✅ Permiso concedido en #capturado');
+                                        saveGyroPermission(); // Guardar en cookie
+                                        enableGyroscope();
+                                    } else {
+                                        console.log('❌ Permiso denegado en #capturado');
+                                    }
+                                })
+                                .catch(function(error) {
+                                    console.error('❌ Error en #capturado:', error);
+                                });
+                        });
+                    }, 500);
+                } else {
+                    console.log('📱 Android - Activando giroscopio directamente en #capturado');
+                    enableGyroscope();
+                }
             }
         }
 
