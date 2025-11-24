@@ -103,36 +103,6 @@ function flu_3d_aframe_functionality() {
             pointer-events: auto !important;
         }
 
-        #capturado .flu-captura a-scene,
-        #capturado .wp-block-button,
-        #capturado a[href*="atrapado"],
-        #capturado .flu-captura .wp-block-button a {
-            animation: none !important;
-            opacity: 1 !important;
-            transform: none !important;
-        }
-
-        /* IMPORTANTE: Subir modelo en #capturado */
-        #capturado .flu-captura a-scene {
-            margin-top: -150vh !important;
-        }
-
-        #capturado .flu-captura {
-            padding-top: 0px;
-        }
-
-        #atrapado .flu-captura a-scene,
-        #atrapado .wp-block-button,
-        #atrapado a[href*="atrapado"],
-        #atrapado .flu-captura .wp-block-button a {
-            animation-delay: 0s !important;
-        }
-
-        /* IMPORTANTE: Subir modelo en #atrapado */
-        #atrapado .flu-captura a-scene {
-            margin-top: -110vh !important;
-        }
-
         @keyframes fadeInModel {
             from {
                 opacity: 0;
@@ -154,56 +124,30 @@ function flu_3d_aframe_functionality() {
                 transform: translateY(0);
             }
         }
-
-        @keyframes slideUp {
-            from {
-                opacity: 0;
-                transform: translateX(-50%) translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(-50%) translateY(0);
-            }
-        }
-
-        #gyro-activate-btn {
-            position: fixed;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 10000;
-            padding: 18px 30px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            border-radius: 30px;
-            font-size: 16px;
-            font-weight: 600;
-            box-shadow: 0 8px 20px rgba(102,126,234,0.4);
-            cursor: pointer;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            transition: all 0.3s ease;
-            animation: slideUp 0.5s ease-out forwards;
-        }
-
-        #gyro-activate-btn:hover {
-            transform: translateX(-50%) scale(1.05);
-            box-shadow: 0 12px 28px rgba(102,126,234,0.6);
-        }
     </style>
     <script>
         var cameraInitialized = false;
-        var gyroscopePermissionGranted = false;
-        var gyroscopeActive = false;
+        var gyroscopeInitialized = false;
         var capturaContainers = [];
 
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('🎬 Flu 3D: Initializing...');
+        // Smoothed rotation values - modelo mirando al frente (Y = 0)
+        var currentRotation = { x: 0, y: 0, z: 0 };
+        var targetRotation = { x: 0, y: 0, z: 0 };
+        var smoothingFactor = 0.12;
+        var animationFrameId = null;
+        var sensorActive = false;
 
+        // Para detectar saltos bruscos en beta (vertical)
+        var lastBeta = null;
+
+        document.addEventListener('DOMContentLoaded', function() {
             const capturaDivs = document.querySelectorAll('.flu-captura');
+
             capturaDivs.forEach(function(div) {
                 capturaContainers.push(div);
+
                 const flu3dImg = div.querySelector('.flu-3d img');
+
                 if (flu3dImg && flu3dImg.src) {
                     const imgSrc = flu3dImg.src;
                     const fileName = imgSrc.split('/').pop().split('.')[0];
@@ -217,211 +161,76 @@ function flu_3d_aframe_functionality() {
 
             initializeAtrapado();
             interceptCapturaLinks();
-            interceptAtrapadorLinks();
 
-            // Manejar carga inicial
             if (window.location.hash === '#captura') {
-                handleCapturaHash();
-            }
-            if (window.location.hash === '#atrapado') {
-                handleAtrapadorHash();
-            }
-            if (window.location.hash === '#capturado') {
-                handleCapturadoHash();
-            }
-
-            // Manejar cambios de hash
-            window.addEventListener('hashchange', function() {
-                console.log('🔀 Hash changed to:', window.location.hash);
-
-                if (window.location.hash === '#captura') {
-                    handleCapturaHash();
-                } else if (window.location.hash === '#atrapado') {
-                    handleAtrapadorHash();
-                } else if (window.location.hash === '#capturado') {
-                    handleCapturadoHash();
-                } else {
-                    hideAtrapado();
-                    removeGyroButton();
-                }
-            });
-        });
-
-        function handleCapturaHash() {
-            console.log('📸 Handling #captura');
-
-            // Si ya tenemos permiso de giroscopio, activarlo
-            if (gyroscopePermissionGranted && !gyroscopeActive) {
-                console.log('✅ Gyro permission already granted, activating...');
-                activateGyroscope();
-            }
-
-            // Inicializar cámara si no está ya
-            if (!cameraInitialized) {
                 initializeCameraForCaptura();
             }
-        }
 
-        function handleAtrapadorHash() {
-            console.log('🎯 Handling #atrapado');
+            window.addEventListener('hashchange', function() {
+                if (window.location.hash === '#captura' && !cameraInitialized) {
+                    initializeCameraForCaptura();
+                }
 
-            // Mostrar #atrapado
-            showAtrapado();
+                if (window.location.hash === '#atrapado') {
+                    showAtrapado();
+                } else {
+                    hideAtrapado();
+                }
+            });
 
-            // Si ya tenemos permiso, activar giroscopio
-            if (gyroscopePermissionGranted && !gyroscopeActive) {
-                console.log('✅ Gyro permission already granted, activating...');
-                activateGyroscope();
+            document.addEventListener('click', function(e) {
+                var target = e.target.closest('a[href="#atrapado"]');
+                if (target) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window.location.hash = '#atrapado';
+                }
+            }, true);
+
+            if (window.location.hash === '#atrapado') {
+                showAtrapado();
             }
-            // Si NO tenemos permiso, intentar activar directamente
-            else if (!gyroscopePermissionGranted) {
-                console.log('⚠️ No gyro permission for #atrapado, trying to activate...');
-                gyroscopePermissionGranted = true;
-                activateGyroscope();
-            }
-        }
-
-        function handleCapturadoHash() {
-            console.log('🏆 Handling #capturado');
-
-            // Si ya tenemos permiso, activar giroscopio
-            if (gyroscopePermissionGranted && !gyroscopeActive) {
-                console.log('✅ Gyro permission already granted, activating for #capturado...');
-                activateGyroscope();
-            }
-            // Si NO tenemos permiso (iOS o Android), intentar activar
-            else if (!gyroscopePermissionGranted) {
-                console.log('⚠️ No gyro permission for #capturado, trying to activate...');
-                // Marcar como concedido y activar (el sistema mostrará su propio prompt si es necesario)
-                gyroscopePermissionGranted = true;
-                activateGyroscope();
-            }
-        }
-
-        function isIOS() {
-            return typeof DeviceOrientationEvent !== 'undefined' &&
-                typeof DeviceOrientationEvent.requestPermission === 'function';
-        }
+        });
 
         function interceptCapturaLinks() {
             var capturaLinks = document.querySelectorAll('a[href="#captura"]');
-            console.log('🔗 Found', capturaLinks.length, 'captura links');
 
             capturaLinks.forEach(function(link) {
-                link.addEventListener('click', function(e) {
-                    var self = this;
-
-                    // CASO 1: Ya verificado por geo - proceder a pedir cámara
-                    if (this.getAttribute('data-geo-verified') === 'true') {
-                        console.log('✅ Geo verified, requesting camera...');
-                        e.preventDefault();
-                        e.stopPropagation();
-
-                        // Limpiar el atributo para que el próximo click vuelva a verificar
-                        this.removeAttribute('data-geo-verified');
-
-                        requestCameraAndNavigate();
-                        return;
-                    }
-
-                    // CASO 2: iOS sin permiso de giroscopio - pedirlo AHORA
-                    if (isIOS() && !gyroscopePermissionGranted) {
-                        e.preventDefault();
-                        e.stopPropagation();
-
-                        console.log('📱 iOS: Requesting gyro permission with user gesture...');
-                        DeviceOrientationEvent.requestPermission()
-                            .then(function(response) {
-                                if (response === 'granted') {
-                                    console.log('✅ Gyro permission granted!');
-                                    gyroscopePermissionGranted = true;
-
-                                    // Ahora hacer click de nuevo para que flu-geolocation lo maneje
-                                    console.log('🔄 Re-clicking to trigger geo check...');
-                                    setTimeout(function() {
-                                        self.click();
-                                    }, 100);
-                                } else {
-                                    console.log('❌ Gyro permission denied');
-                                    alert('Necesitas activar el sensor de movimiento para continuar');
-                                }
-                            })
-                            .catch(function(error) {
-                                console.error('❌ Error requesting gyro permission:', error);
-                                alert('Error al solicitar permisos: ' + error.message);
-                            });
-                        return;
-                    }
-
-                    // CASO 3: Android o iOS con permiso ya concedido - dejar pasar a geo
-                    if (!isIOS()) {
-                        console.log('🤖 Android detected, marking gyro as granted');
-                        gyroscopePermissionGranted = true;
-                    }
-
-                    console.log('⏭️ Passing to geo verification handler...');
-                    // No hacer nada - dejar que flu-geolocation.php lo maneje
-                }, true);
-            });
-        }
-
-        function interceptAtrapadorLinks() {
-            var atrapadorLinks = document.querySelectorAll('a[href="#atrapado"], a[href*="#atrapado"]');
-            console.log('🎯 Found', atrapadorLinks.length, 'atrapado links');
-
-            atrapadorLinks.forEach(function(link) {
                 link.addEventListener('click', function(e) {
                     e.preventDefault();
                     e.stopPropagation();
 
-                    console.log('🎯 Atrapado link clicked');
+                    if (typeof DeviceOrientationEvent !== 'undefined' &&
+                        typeof DeviceOrientationEvent.requestPermission === 'function') {
 
-                    // Si ya tenemos permiso, navegar directamente
-                    if (gyroscopePermissionGranted) {
-                        console.log('✅ Already have gyro permission, navigating...');
-                        window.location.hash = '#atrapado';
-                        return;
-                    }
-
-                    // Si es iOS, pedir permiso
-                    if (isIOS()) {
-                        console.log('📱 iOS: Requesting gyro permission...');
                         DeviceOrientationEvent.requestPermission()
                             .then(function(response) {
                                 if (response === 'granted') {
-                                    console.log('✅ Gyro permission granted');
-                                    gyroscopePermissionGranted = true;
-                                    window.location.hash = '#atrapado';
+                                    requestCameraAndNavigate();
                                 } else {
-                                    console.log('❌ Gyro permission denied');
-                                    alert('Necesitas activar el sensor de movimiento para ver el modelo 3D');
+                                    alert('Necesitas activar el sensor de movimiento para ver el modelo en AR');
                                 }
                             })
                             .catch(function(error) {
-                                console.error('❌ Error requesting gyro permission:', error);
+                                alert('Error: ' + error.message);
                             });
                     } else {
-                        // Android: dar permiso y navegar
-                        console.log('🤖 Android: Granting permission and navigating...');
-                        gyroscopePermissionGranted = true;
-                        window.location.hash = '#atrapado';
+                        requestCameraAndNavigate();
                     }
                 }, true);
             });
         }
 
         function requestCameraAndNavigate() {
-            console.log('📷 Requesting camera...');
             navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
                 .then(function(stream) {
-                    console.log('✅ Camera permission granted');
                     stream.getTracks().forEach(function(track) {
                         track.stop();
                     });
+
                     window.location.hash = '#captura';
                 })
                 .catch(function(error) {
-                    console.error('❌ Camera error:', error);
                     alert('Error al acceder a la cámara: ' + error.message);
                 });
         }
@@ -434,14 +243,19 @@ function flu_3d_aframe_functionality() {
                 atrapado.style.visibility = 'hidden';
                 atrapado.style.opacity = '0';
                 atrapado.style.zIndex = '-1';
+
+                var allChildren = atrapado.querySelectorAll('*');
+                allChildren.forEach(function(child) {
+                    child.style.pointerEvents = 'none';
+                });
             }
         }
 
         function showAtrapado() {
-            console.log('👁️ Showing #atrapado');
             var atrapado = document.getElementById('atrapado');
             if (atrapado) {
                 window.scrollTo(0, 0);
+
                 setTimeout(function() {
                     atrapado.classList.add('show');
                     atrapado.style.pointerEvents = 'auto';
@@ -458,37 +272,43 @@ function flu_3d_aframe_functionality() {
         }
 
         function hideAtrapado() {
-            console.log('🙈 Hiding #atrapado');
             var atrapado = document.getElementById('atrapado');
             if (atrapado) {
                 atrapado.classList.remove('show');
+
                 setTimeout(function() {
                     atrapado.style.pointerEvents = 'none';
                     atrapado.style.visibility = 'hidden';
                     atrapado.style.opacity = '0';
                     atrapado.style.zIndex = '-1';
+
+                    var allChildren = atrapado.querySelectorAll('*');
+                    allChildren.forEach(function(child) {
+                        child.style.pointerEvents = 'none';
+                    });
                 }, 400);
             }
         }
 
         function initializeCameraForCaptura() {
             if (cameraInitialized) return;
-            console.log('📷 Initializing camera for #captura');
+
             cameraInitialized = true;
 
             capturaContainers.forEach(function(container) {
-                if (!container.closest('#capturado')) {
-                    requestCameraPermission(container);
-                }
+                requestCameraPermission(container);
             });
+
+            enableGyroscope();
         }
 
         function requestCameraPermission(container) {
-            if (container.querySelector('video')) return;
+            if (container.querySelector('video')) {
+                return;
+            }
 
             navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
                 .then(function(stream) {
-                    console.log('✅ Camera stream obtained');
                     const video = document.createElement('video');
                     video.autoplay = true;
                     video.muted = true;
@@ -497,112 +317,194 @@ function flu_3d_aframe_functionality() {
                     container.appendChild(video);
                 })
                 .catch(function(error) {
-                    console.error('❌ Camera error:', error);
+                    console.error('Error al acceder a la cámara:', error);
                 });
         }
 
-        function createGyroscopeButton() {
-            var existingBtn = document.getElementById('gyro-activate-btn');
-            if (existingBtn) {
-                console.log('⚠️ Gyro button already exists');
-                return;
-            }
+        // Smoothed animation loop
+        function startSmoothAnimation() {
+            if (animationFrameId) return;
 
-            console.log('🔘 Creating gyro activation button');
-            var button = document.createElement('button');
-            button.id = 'gyro-activate-btn';
-            button.innerHTML = '📱 Toca para activar el movimiento 3D';
+            function animate() {
+                // Interpolate current rotation towards target
+                currentRotation.x += (targetRotation.x - currentRotation.x) * smoothingFactor;
+                currentRotation.y += (targetRotation.y - currentRotation.y) * smoothingFactor;
+                currentRotation.z += (targetRotation.z - currentRotation.z) * smoothingFactor;
 
-            button.onclick = function() {
-                console.log('🔘 Gyro button clicked');
-                DeviceOrientationEvent.requestPermission()
-                    .then(function(response) {
-                        if (response === 'granted') {
-                            console.log('✅ Gyro permission granted');
-                            gyroscopePermissionGranted = true;
-                            activateGyroscope();
-
-                            button.style.transition = 'all 0.3s ease';
-                            button.style.opacity = '0';
-                            button.style.transform = 'translateX(-50%) scale(0.8)';
-                            setTimeout(function() {
-                                button.remove();
-                            }, 300);
-                        } else {
-                            console.log('❌ Gyro permission denied');
-                            button.innerHTML = '❌ Permiso denegado - Toca de nuevo';
-                            button.style.background = 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)';
-                            setTimeout(function() {
-                                button.innerHTML = '📱 Toca para activar el movimiento 3D';
-                                button.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
-                            }, 2000);
-                        }
-                    })
-                    .catch(function(error) {
-                        console.error('❌ Gyro permission error:', error);
-                        button.innerHTML = '⚠️ Error - Intenta de nuevo';
-                        setTimeout(function() {
-                            button.innerHTML = '📱 Toca para activar el movimiento 3D';
-                        }, 2000);
+                // Apply to all models
+                const models = document.querySelectorAll('a-gltf-model, a-box, a-sphere');
+                models.forEach(function(model) {
+                    model.setAttribute('rotation', {
+                        x: currentRotation.x,
+                        y: currentRotation.y,
+                        z: currentRotation.z
                     });
-            };
+                });
 
-            document.body.appendChild(button);
+                animationFrameId = requestAnimationFrame(animate);
+            }
+
+            animate();
         }
 
-        function removeGyroButton() {
-            var btn = document.getElementById('gyro-activate-btn');
-            if (btn) {
-                console.log('🗑️ Removing gyro button');
-                btn.remove();
+        function enableGyroscope() {
+            if (gyroscopeInitialized) return;
+            gyroscopeInitialized = true;
+
+            startSmoothAnimation();
+
+            // Try RelativeOrientationSensor first, then fallback
+            if ('RelativeOrientationSensor' in window) {
+                tryRelativeSensorAPI();
+            } else if ('AbsoluteOrientationSensor' in window) {
+                tryAbsoluteSensorAPI();
+            } else if (window.DeviceOrientationEvent) {
+                window.addEventListener('deviceorientation', handleOrientation);
+                console.log('Using deviceorientation fallback');
             }
         }
 
-        function activateGyroscope() {
-            if (gyroscopeActive) {
-                console.log('⚠️ Gyroscope already active');
-                return;
+        function tryRelativeSensorAPI() {
+            try {
+                const sensor = new RelativeOrientationSensor({ frequency: 60 });
+
+                sensor.addEventListener('reading', function() {
+                    if (sensorActive && sensorActive !== 'relative') return;
+
+                    const q = sensor.quaternion;
+                    if (!q || q.length !== 4) return;
+
+                    const [x, y, z, w] = q;
+
+                    // Convert quaternion to euler angles
+                    const sinp = 2 * (w * x + y * z);
+                    const pitch = Math.abs(sinp) >= 1 ?
+                        Math.sign(sinp) * Math.PI / 2 :
+                        Math.asin(sinp);
+
+                    const siny_cosp = 2 * (w * y - z * x);
+                    const cosy_cosp = 1 - 2 * (x * x + y * y);
+                    const yaw = Math.atan2(siny_cosp, cosy_cosp);
+
+                    const sinr_cosp = 2 * (w * z + x * y);
+                    const cosr_cosp = 1 - 2 * (y * y + z * z);
+                    const roll = Math.atan2(sinr_cosp, cosr_cosp);
+
+                    const pitchDeg = pitch * (180 / Math.PI);
+                    const yawDeg = yaw * (180 / Math.PI);
+                    const rollDeg = roll * (180 / Math.PI);
+
+                    // Modelo mirando al frente (sin los 180 extra)
+                    targetRotation.x = Math.max(-15, Math.min(15, pitchDeg * 0.3));
+                    targetRotation.y = yawDeg * 0.5;
+                    targetRotation.z = Math.max(-10, Math.min(10, -rollDeg * 0.2));
+                });
+
+                sensor.addEventListener('error', function(e) {
+                    console.log('RelativeOrientationSensor error, falling back:', e.error);
+                    sensorActive = false;
+                    tryAbsoluteSensorAPI();
+                });
+
+                sensor.start();
+                sensorActive = 'relative';
+                console.log('Using RelativeOrientationSensor');
+
+            } catch (error) {
+                console.log('RelativeOrientationSensor not available:', error);
+                tryAbsoluteSensorAPI();
             }
+        }
 
-            console.log('🎮 Activating gyroscope...');
-            gyroscopeActive = true;
+        function tryAbsoluteSensorAPI() {
+            if (sensorActive) return;
 
-            // Intentar con DeviceOrientation (más compatible)
-            if (window.DeviceOrientationEvent) {
-                console.log('✅ Using DeviceOrientationEvent');
-                window.addEventListener('deviceorientation', handleOrientation, true);
-                window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+            try {
+                const sensor = new AbsoluteOrientationSensor({ frequency: 60, referenceFrame: 'device' });
+
+                sensor.addEventListener('reading', function() {
+                    const q = sensor.quaternion;
+                    if (!q || q.length !== 4) return;
+
+                    const [x, y, z, w] = q;
+
+                    const sinp = 2 * (w * x + y * z);
+                    const pitch = Math.abs(sinp) >= 1 ?
+                        Math.sign(sinp) * Math.PI / 2 :
+                        Math.asin(sinp);
+
+                    const siny_cosp = 2 * (w * y - z * x);
+                    const cosy_cosp = 1 - 2 * (x * x + y * y);
+                    const yaw = Math.atan2(siny_cosp, cosy_cosp);
+
+                    const sinr_cosp = 2 * (w * z + x * y);
+                    const cosr_cosp = 1 - 2 * (y * y + z * z);
+                    const roll = Math.atan2(sinr_cosp, cosr_cosp);
+
+                    const pitchDeg = pitch * (180 / Math.PI);
+                    const yawDeg = yaw * (180 / Math.PI);
+                    const rollDeg = roll * (180 / Math.PI);
+
+                    targetRotation.x = Math.max(-15, Math.min(15, pitchDeg * 0.3));
+                    targetRotation.y = yawDeg * 0.5;
+                    targetRotation.z = Math.max(-10, Math.min(10, -rollDeg * 0.2));
+                });
+
+                sensor.addEventListener('error', function(e) {
+                    console.log('AbsoluteOrientationSensor error, falling back:', e.error);
+                    sensorActive = false;
+                    window.addEventListener('deviceorientation', handleOrientation);
+                });
+
+                sensor.start();
+                sensorActive = 'absolute';
+                console.log('Using AbsoluteOrientationSensor');
+
+            } catch (error) {
+                console.log('AbsoluteOrientationSensor not available:', error);
+                window.addEventListener('deviceorientation', handleOrientation);
             }
         }
 
         function handleOrientation(event) {
-            const models = document.querySelectorAll('a-gltf-model, a-box, a-sphere, a-cylinder');
-            if (models.length === 0) return;
+            var beta = event.beta;   // -180 to 180 (front/back tilt)
+            var gamma = event.gamma || 0; // -90 to 90 (left/right tilt)
 
-            var alpha = event.alpha || 0;
-            var beta = event.beta || 0;
-            var gamma = event.gamma || 0;
+            // Manejar el caso cuando beta es null o undefined
+            if (beta === null || beta === undefined) {
+                return;
+            }
 
-            // Ajustar sensibilidad
-            var rotationY = -gamma * 0.5;
-            var rotationX = (beta - 90) * 0.3;
+            // Normalizar beta para evitar saltos en los extremos
+            // Cuando el móvil está boca arriba, beta salta de 90 a -90 o viceversa
+            // Limitamos el rango útil a -90 a 90 (móvil en posición vertical normal)
+            if (beta > 90) {
+                beta = 90;
+            } else if (beta < -90) {
+                beta = -90;
+            }
 
-            // Limitar rotación
-            rotationY = Math.max(-20, Math.min(20, rotationY));
-            rotationX = Math.max(-15, Math.min(15, rotationX));
-
-            // Aplicar a TODOS los modelos
-            models.forEach(function(model) {
-                try {
-                    model.setAttribute('rotation', {
-                        x: rotationX,
-                        y: rotationY,
-                        z: 0
-                    });
-                } catch (e) {
-                    // Silencioso
+            // Detectar y filtrar saltos bruscos
+            if (lastBeta !== null) {
+                var deltaBeta = Math.abs(beta - lastBeta);
+                // Si hay un salto mayor a 45 grados en un frame, ignorar
+                if (deltaBeta > 45) {
+                    return;
                 }
-            });
+            }
+            lastBeta = beta;
+
+            // Calcular rotación - móvil vertical (beta=90) = modelo recto (x=0)
+            var rotationX = (beta - 90) * 0.2;
+            var rotationY = -gamma * 0.4;
+
+            // Clamp values más restrictivo para evitar movimientos extremos
+            rotationX = Math.max(-12, Math.min(12, rotationX));
+            rotationY = Math.max(-15, Math.min(15, rotationY));
+
+            targetRotation.x = rotationX;
+            targetRotation.y = rotationY;
+            targetRotation.z = 0;
         }
 
         function createBasicAFrameScene(container) {
@@ -667,49 +569,26 @@ function flu_3d_aframe_functionality() {
 
             const model = document.createElement('a-gltf-model');
             model.setAttribute('src', modelPath);
-
-            // Ajustar posición y rotación según contexto
-            const isInAtrapado = container.closest('#atrapado');
-            const isInCapturado = container.closest('#capturado');
-
-            let modelY = '1.5'; // Valor por defecto para #captura
-            let modelRotationX = '0'; // Rotación por defecto
-            let context = 'captura';
-
-            if (isInAtrapado) {
-                modelY = '1.5';
-                modelRotationX = '-10'; // Mira un poco hacia abajo
-                context = 'atrapado';
-            } else if (isInCapturado) {
-                modelY = '2.5'; // Más alto
-                modelRotationX = '-20'; // Mira más hacia
-                // abajo para compensar la altura
-                context = 'capturado';
-            }
-
-            console.log('🎨 Creating model in context:', context, 'with Y:', modelY, 'rotX:', modelRotationX);
-
-            model.setAttribute('position', '0 ' + modelY + ' -3');
-            model.setAttribute('rotation', modelRotationX + ' 0 0');
+            model.setAttribute('position', '0 1.5 -3');
+            model.setAttribute('rotation', '0 0 0');  // Empieza mirando al frente
             model.setAttribute('scale', '2 2 2');
 
             scene.appendChild(model);
             scene.appendChild(camera);
+
             container.appendChild(scene);
 
-            if (!isInCapturado && !isInAtrapado) {
-                const randomModelDelay = Math.random() * 1000 + 1000;
-                const buttonDelay = randomModelDelay + 500;
+            const randomModelDelay = Math.random() * 1000 + 1000;
+            const buttonDelay = randomModelDelay + 500;
 
-                scene.style.animationDelay = randomModelDelay + 'ms';
+            scene.style.animationDelay = randomModelDelay + 'ms';
 
-                const buttons = container.querySelectorAll('.wp-block-button, a[href*="atrapado"]');
-                buttons.forEach(function(button) {
-                    button.style.animationDelay = buttonDelay + 'ms';
-                });
-            }
+            const buttons = container.querySelectorAll('.wp-block-button, a[href*="atrapado"]');
+            buttons.forEach(function(button) {
+                button.style.animationDelay = buttonDelay + 'ms';
+            });
         }
     </script>
     <?php
 }
-add_action('wp_footer', 'flu_3d_aframe_functionality', 1);
+add_action('wp_footer', 'flu_3d_aframe_functionality');
