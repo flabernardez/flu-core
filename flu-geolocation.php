@@ -414,7 +414,7 @@ function flu_geo_add_validation_script() {
 
         function checkGeolocationOnly(linkElement) {
             if (!navigator.geolocation) {
-                console.error('Geolocation not supported');
+                console.error('❌ Geolocation not supported');
                 document.body.classList.remove('geo-checking');
                 // Navegar e ir a la sección
                 window.location.hash = 'localizacion-ko';
@@ -425,7 +425,9 @@ function flu_geo_add_validation_script() {
                 return;
             }
 
-            console.log('Requesting geolocation...');
+            console.log('🌍 Requesting geolocation...');
+            console.log('📍 Target coordinates:', targetLat, targetLng);
+            console.log('📏 Tolerance:', tolerance, 'meters');
 
             // Añadir delay ficticio de 2-3 segundos (random)
             var fakeDelay = Math.random() * 1000 + 2000; // 2000-3000ms
@@ -433,12 +435,14 @@ function flu_geo_add_validation_script() {
 
             navigator.geolocation.getCurrentPosition(
                 function(position) {
-                    console.log('User position obtained:', position.coords.latitude, position.coords.longitude);
-                    console.log('Accuracy:', position.coords.accuracy, 'meters');
+                    console.log('✅ User position obtained:', position.coords.latitude, position.coords.longitude);
+                    console.log('📡 Accuracy:', position.coords.accuracy, 'meters');
+                    console.log('⏱️ GPS response time:', Date.now() - startTime, 'ms');
 
                     // Calcular cuánto tiempo falta para completar el delay ficticio
                     var elapsed = Date.now() - startTime;
                     var remainingDelay = Math.max(0, fakeDelay - elapsed);
+                    console.log('⏳ Remaining delay:', remainingDelay, 'ms');
 
                     setTimeout(function() {
                         waitForGoogleMaps(function() {
@@ -452,12 +456,14 @@ function flu_geo_add_validation_script() {
                                 ubicacionEspecifica
                             );
 
-                            console.log('Distance calculated:', distance, 'meters');
+                            console.log('📏 Distance calculated:', distance.toFixed(2), 'meters');
+                            console.log('🎯 Tolerance:', tolerance, 'meters');
+                            console.log('✔️ Within range?', distance <= tolerance);
 
                             document.body.classList.remove('geo-checking');
 
                             if (distance <= tolerance) {
-                                console.log('Location validated! Going to #captura');
+                                console.log('✅ Location validated! Going to #captura');
                                 document.body.classList.add('geo-validated');
                                 document.body.classList.remove('geo-out-of-range');
                                 // Navegar e ir a la sección
@@ -467,7 +473,7 @@ function flu_geo_add_validation_script() {
                                     if (section) section.scrollIntoView();
                                 }, 100);
                             } else {
-                                console.log('Location out of range. Distance:', distance, '- Going to #localizacion-ko');
+                                console.log('❌ Location out of range. Distance:', distance.toFixed(2), '- Going to #localizacion-ko');
                                 document.body.classList.add('geo-out-of-range');
                                 document.body.classList.remove('geo-validated');
                                 // Navegar e ir a la sección
@@ -487,7 +493,8 @@ function flu_geo_add_validation_script() {
                         3: 'Tiempo de espera agotado'
                     };
 
-                    console.error('Geolocation error:', error.code, errorMessages[error.code] || error.message);
+                    console.error('❌ Geolocation error:', error.code, errorMessages[error.code] || error.message);
+                    console.log('⏱️ Time elapsed before error:', Date.now() - startTime, 'ms');
 
                     // Esperar el delay mínimo incluso en caso de error
                     var elapsed = Date.now() - startTime;
@@ -505,7 +512,7 @@ function flu_geo_add_validation_script() {
                 },
                 {
                     enableHighAccuracy: true,  // Forzar GPS de alta precisión
-                    timeout: 30000,
+                    timeout: 15000,  // 15 segundos - suficiente para 3G/GPS
                     maximumAge: 0  // NUNCA usar caché, siempre lectura nueva
                 }
             );

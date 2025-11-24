@@ -216,17 +216,34 @@ function flu_3d_aframe_functionality() {
             capturaDivs.forEach(function(div) {
                 capturaContainers.push(div);
 
-                const flu3dImg = div.querySelector('.flu-3d img');
+                // Solo crear escenas automáticamente para #capturado
+                // En #captura, las escenas se crean después de pedir cámara
+                const isInCapturado = div.closest('#capturado') !== null;
+                const isInCaptura = div.closest('#captura') !== null;
 
-                if (flu3dImg && flu3dImg.src) {
-                    const imgSrc = flu3dImg.src;
-                    const fileName = imgSrc.split('/').pop().split('.')[0];
-                    const modelPath = '/wp-content/uploads/' + fileName + '.glb';
-                    flu3dImg.style.display = 'none';
-                    createModelAFrameScene(div, modelPath);
-                } else {
-                    createBasicAFrameScene(div);
+                if (isInCapturado) {
+                    // Estamos en #capturado - crear sin loader
+                    const flu3dImg = div.querySelector('.flu-3d img');
+                    if (flu3dImg && flu3dImg.src) {
+                        const imgSrc = flu3dImg.src;
+                        const fileName = imgSrc.split('/').pop().split('.')[0];
+                        const modelPath = '/wp-content/uploads/' + fileName + '.glb';
+                        flu3dImg.style.display = 'none';
+                        createModelAFrameScene(div, modelPath);
+                    }
+                } else if (!isInCaptura) {
+                    // No estamos ni en #captura ni en #capturado
+                    // Por si acaso hay otros contenedores
+                    const flu3dImg = div.querySelector('.flu-3d img');
+                    if (flu3dImg && flu3dImg.src) {
+                        const imgSrc = flu3dImg.src;
+                        const fileName = imgSrc.split('/').pop().split('.')[0];
+                        const modelPath = '/wp-content/uploads/' + fileName + '.glb';
+                        flu3dImg.style.display = 'none';
+                        createModelAFrameScene(div, modelPath);
+                    }
                 }
+                // Si isInCaptura === true, no hacer nada aquí, se creará después
             });
 
             initializeAtrapado();
@@ -376,17 +393,32 @@ function flu_3d_aframe_functionality() {
         function initializeCameraForCaptura() {
             if (cameraInitialized) return;
 
-            cameraInitialized = true;
+            console.log('Inicializando cámara y escenas 3D...');
 
+            // PRIMERO: Pedir permisos de cámara
             capturaContainers.forEach(function(container) {
-                requestCameraPermission(container);
+                requestCameraPermission(container, function() {
+                    // DESPUÉS: Crear la escena con loader
+                    const flu3dImg = container.querySelector('.flu-3d img');
+
+                    if (flu3dImg && flu3dImg.src) {
+                        const imgSrc = flu3dImg.src;
+                        const fileName = imgSrc.split('/').pop().split('.')[0];
+                        const modelPath = '/wp-content/uploads/' + fileName + '.glb';
+                        createModelAFrameSceneWithLoader(container, modelPath);
+                    } else {
+                        createBasicAFrameSceneWithLoader(container);
+                    }
+                });
             });
 
+            cameraInitialized = true;
             enableGyroscope();
         }
 
-        function requestCameraPermission(container) {
+        function requestCameraPermission(container, callback) {
             if (container.querySelector('video')) {
+                if (callback) callback();
                 return;
             }
 
@@ -398,9 +430,17 @@ function flu_3d_aframe_functionality() {
                     video.playsInline = true;
                     video.srcObject = stream;
                     container.appendChild(video);
+
+                    console.log('Cámara activada');
+
+                    // Ejecutar callback después de activar cámara
+                    if (callback) {
+                        setTimeout(callback, 100);
+                    }
                 })
                 .catch(function(error) {
                     console.error('Error al acceder a la cámara:', error);
+                    if (callback) callback();
                 });
         }
 
@@ -590,8 +630,8 @@ function flu_3d_aframe_functionality() {
             targetRotation.z = 0;
         }
 
-        function createBasicAFrameScene(container) {
-            // Crear el loader con aguja de brújula
+        function createBasicAFrameSceneWithLoader(container) {
+            // Crear el loader con aguja de brújula PRIMERO
             const loader = createVirusLoader();
             container.appendChild(loader);
 
@@ -639,8 +679,8 @@ function flu_3d_aframe_functionality() {
 
             container.appendChild(scene);
 
-            // Delay random entre 3-5 segundos
-            const randomDelay = Math.random() * 2000 + 3000; // 3000-5000ms
+            // Delay random entre 2-3 segundos
+            const randomDelay = Math.random() * 1000 + 2000; // 2000-3000ms
 
             setTimeout(function() {
                 loader.classList.add('hidden');
@@ -656,10 +696,10 @@ function flu_3d_aframe_functionality() {
             }, randomDelay);
         }
 
-        function createModelAFrameScene(container, modelPath) {
-            // Detectar si estamos en #capturado (virus ya atrapado)
-            const isCapturado = window.location.hash === '#capturado' ||
-                container.closest('#capturado') !== null;
+        function createModelAFrameSceneWithLoader(container, modelPath) {
+            // SOLO para #captura: con loader y delay
+            const loader = createVirusLoader();
+            container.appendChild(loader);
 
             const scene = document.createElement('a-scene');
             scene.setAttribute('vr-mode-ui', 'enabled: false');
@@ -676,17 +716,8 @@ function flu_3d_aframe_functionality() {
 
             const model = document.createElement('a-gltf-model');
             model.setAttribute('src', modelPath);
-
-            if (isCapturado) {
-                // En #capturado: posición más arriba
-                model.setAttribute('position', '0 2.5 -3');
-                model.setAttribute('scale', '2 2 2');
-            } else {
-                // En #captura: posición actual
-                model.setAttribute('position', '0 1.5 -3');
-                model.setAttribute('scale', '2 2 2');
-            }
-
+            model.setAttribute('position', '0 1.5 -3');
+            model.setAttribute('scale', '2 2 2');
             model.setAttribute('rotation', '0 0 0');
 
             scene.appendChild(model);
@@ -694,32 +725,53 @@ function flu_3d_aframe_functionality() {
 
             container.appendChild(scene);
 
-            if (isCapturado) {
-                // En #capturado: sin loader, modelo aparece inmediatamente
+            const randomDelay = Math.random() * 1000 + 2000; // 2000-3000ms
+
+            setTimeout(function() {
+                loader.classList.add('hidden');
                 scene.classList.add('loaded');
-                // Activar giroscopio si no está ya inicializado
-                if (!gyroscopeInitialized) {
-                    enableGyroscope();
-                }
-            } else {
-                // En #captura: con loader y delay
-                const loader = createVirusLoader();
-                container.insertBefore(loader, scene);
 
-                const randomDelay = Math.random() * 2000 + 3000; // 3000-5000ms
-
+                // Mostrar botón 1 segundo después de que aparezca el modelo
                 setTimeout(function() {
-                    loader.classList.add('hidden');
-                    scene.classList.add('loaded');
+                    const buttons = container.querySelectorAll('.wp-block-button');
+                    buttons.forEach(function(btn) {
+                        btn.classList.add('visible');
+                    });
+                }, 1000);
+            }, randomDelay);
+        }
 
-                    // Mostrar botón 1 segundo después de que aparezca el modelo
-                    setTimeout(function() {
-                        const buttons = container.querySelectorAll('.wp-block-button');
-                        buttons.forEach(function(btn) {
-                            btn.classList.add('visible');
-                        });
-                    }, 1000);
-                }, randomDelay);
+        function createModelAFrameScene(container, modelPath) {
+            // Para #capturado: sin loader, aparece inmediatamente
+            const scene = document.createElement('a-scene');
+            scene.setAttribute('vr-mode-ui', 'enabled: false');
+            scene.setAttribute('device-orientation-permission-ui', 'enabled: false');
+            scene.setAttribute('background', 'color: transparent; transparent: true');
+            scene.setAttribute('renderer', 'alpha: true; antialias: true');
+            scene.setAttribute('embedded', '');
+
+            const camera = document.createElement('a-camera');
+            camera.setAttribute('look-controls', 'enabled: false');
+            camera.setAttribute('wasd-controls', 'enabled: false');
+            camera.setAttribute('device-orientation-controls', 'enabled: false');
+            camera.setAttribute('position', '0 1.6 0');
+
+            const model = document.createElement('a-gltf-model');
+            model.setAttribute('src', modelPath);
+            model.setAttribute('position', '0 2.5 -3');
+            model.setAttribute('scale', '2 2 2');
+            model.setAttribute('rotation', '0 0 0');
+
+            scene.appendChild(model);
+            scene.appendChild(camera);
+
+            container.appendChild(scene);
+
+            scene.classList.add('loaded');
+
+            // Activar giroscopio si no está ya inicializado
+            if (!gyroscopeInitialized) {
+                enableGyroscope();
             }
         }
 
