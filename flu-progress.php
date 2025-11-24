@@ -72,6 +72,106 @@ function flu_core_add_visited_css() {
         body.ultzama-completado .ultzama-completado-badge {
             display: block !important;
         }
+        
+        /* Virus bloqueados - progreso secuencial */
+        .progreso li.locked {
+            opacity: 0.4;
+            pointer-events: none;
+        }
+        
+        .progreso li.locked a {
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+        
+        .progreso li.unlocked {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        
+        /* Modal de río completado */
+        .river-complete-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            padding: 0;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+
+        .river-complete-overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .river-complete-modal {
+            background: var(--wp--preset--color--base, #fff);
+            border-radius: 16px;
+            padding: 40px 32px;
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            transform: scale(0.9);
+            transition: transform 0.3s ease;
+        }
+
+        .river-complete-overlay.show .river-complete-modal {
+            transform: scale(1);
+        }
+
+        .river-complete-emoji {
+            font-size: 64px;
+            margin-bottom: 20px;
+            animation: celebrate 0.6s ease;
+        }
+
+        @keyframes celebrate {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+        }
+
+        .river-complete-title {
+            color: var(--wp--preset--color--contrast, #000);
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+
+        .river-complete-text {
+            color: var(--wp--preset--color--contrast, #000);
+            font-size: 16px;
+            line-height: 1.5;
+            margin-bottom: 24px;
+            font-weight: 400;
+        }
+
+        .river-complete-button {
+            background: var(--wp--preset--color--accent, #00ff88);
+            color: var(--wp--preset--color--base, #000);
+            border: none;
+            padding: 16px 32px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            touch-action: manipulation;
+            width: 100%;
+            transition: transform 0.1s ease;
+        }
+
+        .river-complete-button:active {
+            transform: scale(0.98);
+        }
     </style>';
 }
 add_action( 'wp_head', 'flu_core_add_visited_css' );
@@ -244,7 +344,9 @@ function flu_core_ajax_check_zone_completion() {
             'post_parent' => $arga_parent->ID,
             'post_status' => 'publish',
             'numberposts' => -1,
-            'fields' => 'ids'
+            'fields' => 'ids',
+            'orderby' => 'menu_order',
+            'order' => 'ASC'
         ) );
 
         $response['arga_children'] = $arga_children;
@@ -274,7 +376,9 @@ function flu_core_ajax_check_zone_completion() {
             'post_parent' => $ultzama_parent->ID,
             'post_status' => 'publish',
             'numberposts' => -1,
-            'fields' => 'ids'
+            'fields' => 'ids',
+            'orderby' => 'menu_order',
+            'order' => 'ASC'
         ) );
 
         $response['ultzama_children'] = $ultzama_children;
@@ -368,6 +472,62 @@ function flu_core_add_visited_functionality() {
             });
         }
 
+        function applySequentialUnlock() {
+            console.log('🔓 Aplicando desbloqueo secuencial');
+            const capturedPages = getCapturedPages();
+            const progressoLoops = document.querySelectorAll('.wp-block-query.progreso');
+
+            progressoLoops.forEach(function(loop) {
+                const listItems = Array.from(loop.querySelectorAll('li[class*="post-"]'));
+
+                console.log('📋 Lista de virus encontrados:', listItems.length);
+
+                // Encontrar el primer virus no capturado
+                let nextUnlocked = -1;
+                for (let i = 0; i < listItems.length; i++) {
+                    const li = listItems[i];
+                    const match = li.className.match(/post-(\d+)/);
+
+                    if (match && match[1]) {
+                        const pageId = parseInt(match[1]);
+
+                        if (!capturedPages.includes(pageId)) {
+                            nextUnlocked = i;
+                            console.log('🎯 Próximo virus a desbloquear: índice', i, 'ID', pageId);
+                            break;
+                        }
+                    }
+                }
+
+                // Si no hay ninguno sin capturar, todos están desbloqueados
+                if (nextUnlocked === -1) {
+                    nextUnlocked = listItems.length;
+                    console.log('✅ Todos los virus capturados');
+                }
+
+                // Bloquear/desbloquear según el orden
+                listItems.forEach(function(li, index) {
+                    const match = li.className.match(/post-(\d+)/);
+
+                    if (match && match[1]) {
+                        const pageId = parseInt(match[1]);
+                        const isCaptured = capturedPages.includes(pageId);
+
+                        // Desbloquear si está capturado O si es el siguiente en la secuencia
+                        if (isCaptured || index === nextUnlocked) {
+                            li.classList.remove('locked');
+                            li.classList.add('unlocked');
+                            console.log('🔓 Desbloqueado:', pageId, '(índice', index + ')');
+                        } else {
+                            li.classList.add('locked');
+                            li.classList.remove('unlocked');
+                            console.log('🔒 Bloqueado:', pageId, '(índice', index + ')');
+                        }
+                    }
+                });
+            });
+        }
+
         function updateCapturedLinks() {
             const capturedPages = getCapturedPages();
             const progressoLoops = document.querySelectorAll('.wp-block-query.progreso');
@@ -418,6 +578,14 @@ function flu_core_add_visited_functionality() {
                     link.addEventListener('click', function(e) {
                         const listItem = this.closest('li[class*="post-"]');
                         if (listItem) {
+                            // Verificar si el virus está bloqueado
+                            if (listItem.classList.contains('locked')) {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                console.log('🔒 Virus bloqueado - debes capturar los anteriores primero');
+                                return false;
+                            }
+
                             const classList = listItem.className;
                             const match = classList.match(/post-(\d+)/);
 
@@ -456,6 +624,7 @@ function flu_core_add_visited_functionality() {
                             console.log('Virus capturado, actualizando enlaces y verificando zonas...');
                             setTimeout(function() {
                                 markVisitedElements();
+                                applySequentialUnlock();
                                 updateCapturedLinks();
                                 checkZoneCompletion();
                             }, 100);
@@ -482,6 +651,7 @@ function flu_core_add_visited_functionality() {
                                 console.log('Virus capturado, actualizando enlaces y verificando zonas...');
                                 setTimeout(function() {
                                     markVisitedElements();
+                                    applySequentialUnlock();
                                     updateCapturedLinks();
                                     checkZoneCompletion();
                                 }, 100);
@@ -573,12 +743,138 @@ function flu_core_add_visited_functionality() {
             });
         }
 
+        function setCookie(name, value, days) {
+            const expires = new Date();
+            expires.setTime(expires.getTime() + (days * 24 * 60 * 60 * 1000));
+            document.cookie = name + "=" + value + ";expires=" + expires.toUTCString() + ";path=/";
+        }
+
+        function showRiverCompleteModal(riverName, bothComplete) {
+            // Verificar si ya mostramos este modal antes
+            const cookieName = 'flu_' + riverName + '_modal_shown';
+            if (getCookie(cookieName) === 'si') {
+                console.log('Modal de', riverName, 'ya mostrado anteriormente');
+                return;
+            }
+
+            console.log('🎉 Mostrando modal de río completado:', riverName, '- Ambos completos:', bothComplete);
+
+            const overlay = document.createElement('div');
+            overlay.className = 'river-complete-overlay';
+
+            const modal = document.createElement('div');
+            modal.className = 'river-complete-modal';
+
+            const emoji = document.createElement('div');
+            emoji.className = 'river-complete-emoji';
+            emoji.textContent = '🎉';
+
+            const title = document.createElement('div');
+            title.className = 'river-complete-title';
+            title.textContent = '¡Río limpio!';
+
+            const text = document.createElement('div');
+            text.className = 'river-complete-text';
+
+            // Si ambos ríos están completos, mostrar mensaje especial
+            if (bothComplete) {
+                text.textContent = '¡Terminaste de limpiar los ríos de virus! Enhorabuena';
+            } else {
+                text.textContent = 'Has conseguido limpiar el río ' + riverName.toUpperCase() + ' de virus. ¡Enhorabuena!';
+            }
+
+            const button = document.createElement('button');
+            button.className = 'river-complete-button';
+            button.textContent = 'Cerrar';
+
+            modal.appendChild(emoji);
+            modal.appendChild(title);
+            modal.appendChild(text);
+            modal.appendChild(button);
+            overlay.appendChild(modal);
+            document.body.appendChild(overlay);
+
+            // Mostrar con animación
+            setTimeout(function() {
+                overlay.classList.add('show');
+            }, 100);
+
+            // Guardar que ya mostramos este modal
+            setCookie(cookieName, 'si', 365);
+
+            // Cerrar al hacer click en el botón
+            button.addEventListener('click', function() {
+                overlay.classList.remove('show');
+                setTimeout(function() {
+                    document.body.removeChild(overlay);
+                }, 300);
+            });
+
+            // Cerrar al hacer click fuera del modal
+            overlay.addEventListener('click', function(e) {
+                if (e.target === overlay) {
+                    overlay.classList.remove('show');
+                    setTimeout(function() {
+                        document.body.removeChild(overlay);
+                    }, 300);
+                }
+            });
+        }
+
+        function checkAndShowRiverModals() {
+            // Solo mostrar en la página /virus/
+            const currentPath = window.location.pathname;
+            if (!currentPath.includes('/virus/') && !currentPath.endsWith('/virus')) {
+                return;
+            }
+
+            console.log('📍 Estamos en /virus/, verificando ríos completados...');
+
+            const argaCompleto = getCookie('arga_completado');
+            const ultzamaCompleto = getCookie('ultzama_completado');
+            const bothComplete = (argaCompleto === 'si' && ultzamaCompleto === 'si');
+
+            console.log('🏆 Ambos ríos completos:', bothComplete);
+
+            // Pequeño delay para que se vea bien la transición
+            setTimeout(function() {
+                // Determinar cuál modal mostrar
+                const argaModalShown = getCookie('flu_arga_modal_shown');
+                const ultzamaModalShown = getCookie('flu_ultzama_modal_shown');
+
+                // Si ambos ríos están completos
+                if (bothComplete) {
+                    // Mostrar modal del último río completado (el que no tiene modal mostrado)
+                    if (argaCompleto === 'si' && argaModalShown !== 'si') {
+                        showRiverCompleteModal('arga', true);
+                    } else if (ultzamaCompleto === 'si' && ultzamaModalShown !== 'si') {
+                        showRiverCompleteModal('ultzama', true);
+                    }
+                } else {
+                    // Comportamiento normal: mostrar modal individual por río
+                    if (argaCompleto === 'si') {
+                        showRiverCompleteModal('arga', false);
+                    }
+
+                    if (ultzamaCompleto === 'si') {
+                        // Si arga ya mostró modal, esperar un poco más
+                        const delay = argaCompleto === 'si' ? 500 : 0;
+                        setTimeout(function() {
+                            showRiverCompleteModal('ultzama', false);
+                        }, delay);
+                    }
+                }
+            }, 800);
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
             markVisitedElements();
+            applySequentialUnlock();
             updateCapturedLinks();
             trackLinkClicks();
             trackCaptureWhenAtrapado();
-            checkZoneCompletion(); // Verificar al cargar la página
+            checkZoneCompletion();
+            checkAndShowRiverModals(); // Verificar y mostrar modales de ríos completados
 
             // Mostrar insignias si las cookies ya existen
             setTimeout(function() {
@@ -684,8 +980,11 @@ function flu_core_reset_visited_pages() {
         'flu_visited_pages',
         'flu_captured_pages',
         'flu_permissions',
+        'flu_gyro_permission',
         'arga_completado',
-        'ultzama_completado'
+        'ultzama_completado',
+        'flu_arga_modal_shown',
+        'flu_ultzama_modal_shown'
     );
 
     foreach ( $cookies_to_clear as $cookie_name ) {
