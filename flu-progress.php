@@ -2,6 +2,7 @@
 /**
  * Progress tracking functionality for Fluvial Core
  * Track visited pages using cookies and update visual elements
+ * ONLY applies to pages under /virus/ hierarchy
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -9,9 +10,40 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
+ * Check if current page is under /virus/ hierarchy
+ */
+function flu_core_is_virus_page() {
+    if ( ! is_page() ) {
+        return false;
+    }
+
+    $current_page = get_post( get_the_ID() );
+
+    // Check if current page or any ancestor is named 'virus'
+    $page_to_check = $current_page;
+    while ( $page_to_check ) {
+        if ( $page_to_check->post_name === 'virus' ) {
+            return true;
+        }
+        if ( $page_to_check->post_parent ) {
+            $page_to_check = get_post( $page_to_check->post_parent );
+        } else {
+            break;
+        }
+    }
+
+    return false;
+}
+
+/**
  * Add CSS for visited elements
  */
 function flu_core_add_visited_css() {
+    // Only apply to pages under /virus/
+    if ( ! flu_core_is_virus_page() ) {
+        return;
+    }
+
     // Add body classes for completed zones
     $body_classes = array();
 
@@ -180,7 +212,8 @@ add_action( 'wp_head', 'flu_core_add_visited_css' );
  * Track visited pages using cookies (1 year duration)
  */
 function flu_core_track_page_visit() {
-    if ( ! is_page() ) {
+    // Only track pages under /virus/
+    if ( ! flu_core_is_virus_page() ) {
         return;
     }
 
@@ -412,6 +445,11 @@ add_action( 'wp_ajax_nopriv_flu_core_check_zone_completion', 'flu_core_ajax_chec
  * Add visited class to elements and track clicks
  */
 function flu_core_add_visited_functionality() {
+    // Only add functionality to pages under /virus/
+    if ( ! flu_core_is_virus_page() ) {
+        return;
+    }
+
     ?>
     <script>
         function getCookie(name) {
@@ -900,7 +938,11 @@ add_action( 'wp_footer', 'flu_core_add_visited_functionality' );
  * Update visual elements based on visited pages
  */
 function flu_core_update_progress_elements( $content ) {
-    // Only modify if .progreso query loop exists
+    // Only modify if on a /virus/ page AND .progreso query loop exists
+    if ( ! flu_core_is_virus_page() ) {
+        return $content;
+    }
+
     if ( strpos( $content, 'wp-block-query progreso' ) === false ) {
         return $content;
     }
@@ -1000,6 +1042,11 @@ add_action( 'wp_ajax_nopriv_flu_core_reset_visited', 'flu_core_reset_visited_pag
  * Enqueue script for reset button functionality
  */
 function flu_core_enqueue_reset_script() {
+    // Only add reset button functionality on /virus/ pages
+    if ( ! flu_core_is_virus_page() ) {
+        return;
+    }
+
     ?>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
