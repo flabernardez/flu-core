@@ -39,28 +39,26 @@ function flu_core_is_virus_page() {
  * Add CSS for visited elements
  */
 function flu_core_add_visited_css() {
-    // Only apply to pages under /virus/
-    if ( ! flu_core_is_virus_page() ) {
-        return;
+    // Add body classes for completed zones (only on virus pages)
+    if ( flu_core_is_virus_page() ) {
+        $body_classes = array();
+
+        if ( isset( $_COOKIE['arga_completado'] ) && $_COOKIE['arga_completado'] === 'si' ) {
+            $body_classes[] = 'arga-completado';
+        }
+
+        if ( isset( $_COOKIE['ultzama_completado'] ) && $_COOKIE['ultzama_completado'] === 'si' ) {
+            $body_classes[] = 'ultzama-completado';
+        }
+
+        if ( !empty( $body_classes ) ) {
+            add_filter( 'body_class', function( $classes ) use ( $body_classes ) {
+                return array_merge( $classes, $body_classes );
+            } );
+        }
     }
 
-    // Add body classes for completed zones
-    $body_classes = array();
-
-    if ( isset( $_COOKIE['arga_completado'] ) && $_COOKIE['arga_completado'] === 'si' ) {
-        $body_classes[] = 'arga-completado';
-    }
-
-    if ( isset( $_COOKIE['ultzama_completado'] ) && $_COOKIE['ultzama_completado'] === 'si' ) {
-        $body_classes[] = 'ultzama-completado';
-    }
-
-    if ( !empty( $body_classes ) ) {
-        add_filter( 'body_class', function( $classes ) use ( $body_classes ) {
-            return array_merge( $classes, $body_classes );
-        } );
-    }
-
+    // CSS for progress visualization - applies to ALL pages with .progreso elements
     echo '<style>
         .progreso .visited hr.wp-block-separator.has-custom-white-background-color.has-background {
             background-color: var(--wp--preset--color--custom-green) !important;
@@ -74,7 +72,7 @@ function flu_core_add_visited_css() {
             color: var(--wp--preset--color--custom-white) !important;
         }
         
-        /* Virus capture states */
+        /* Virus capture states - only for virus pages */
         .progreso .sin-capturar {
             display: block;
         }
@@ -105,7 +103,7 @@ function flu_core_add_visited_css() {
             display: block !important;
         }
         
-        /* Virus bloqueados - progreso secuencial */
+        /* Virus bloqueados - progreso secuencial - only for virus pages */
         .progreso li.locked {
             opacity: 0.4;
             pointer-events: none;
@@ -212,8 +210,7 @@ add_action( 'wp_head', 'flu_core_add_visited_css' );
  * Track visited pages using cookies (1 year duration)
  */
 function flu_core_track_page_visit() {
-    // Only track pages under /virus/
-    if ( ! flu_core_is_virus_page() ) {
+    if ( ! is_page() ) {
         return;
     }
 
@@ -239,7 +236,7 @@ function flu_core_track_page_visit() {
         }
     }
 
-    // Add current page if not already visited
+    // Add current page if not already visited - APPLIES TO ALL PAGES
     if ( ! in_array( $current_page_id, $visited ) ) {
         $visited[] = $current_page_id;
 
@@ -248,11 +245,13 @@ function flu_core_track_page_visit() {
         setcookie( $cookie_name, json_encode( $visited ), $expire_time, '/' );
     }
 
-    // Check if URL contains #atrapado and track capture
-    if ( isset( $_SERVER['REQUEST_URI'] ) && strpos( $_SERVER['REQUEST_URI'], '#atrapado' ) !== false ) {
-        if ( ! in_array( $current_page_id, $captured ) ) {
-            $captured[] = $current_page_id;
-            setcookie( $captured_cookie_name, json_encode( $captured ), $expire_time, '/' );
+    // Check if URL contains #atrapado and track capture - ONLY FOR VIRUS PAGES
+    if ( flu_core_is_virus_page() ) {
+        if ( isset( $_SERVER['REQUEST_URI'] ) && strpos( $_SERVER['REQUEST_URI'], '#atrapado' ) !== false ) {
+            if ( ! in_array( $current_page_id, $captured ) ) {
+                $captured[] = $current_page_id;
+                setcookie( $captured_cookie_name, json_encode( $captured ), $expire_time, '/' );
+            }
         }
     }
 }
@@ -445,11 +444,7 @@ add_action( 'wp_ajax_nopriv_flu_core_check_zone_completion', 'flu_core_ajax_chec
  * Add visited class to elements and track clicks
  */
 function flu_core_add_visited_functionality() {
-    // Only add functionality to pages under /virus/
-    if ( ! flu_core_is_virus_page() ) {
-        return;
-    }
-
+    // JavaScript functionality applies to ALL pages with .progreso elements
     ?>
     <script>
         function getCookie(name) {
@@ -511,7 +506,16 @@ function flu_core_add_visited_functionality() {
         }
 
         function applySequentialUnlock() {
-            console.log('🔓 Aplicando desbloqueo secuencial');
+            // Solo aplicar bloqueo secuencial en páginas de virus
+            const currentPath = window.location.pathname;
+            const isVirusPage = currentPath.includes('/virus/') || currentPath.endsWith('/virus');
+
+            if (!isVirusPage) {
+                console.log('🔓 No estamos en /virus/ - todos los enlaces desbloqueados');
+                return; // No aplicar bloqueo fuera de /virus/
+            }
+
+            console.log('🔓 Aplicando desbloqueo secuencial (solo en /virus/)');
             const capturedPages = getCapturedPages();
             const progressoLoops = document.querySelectorAll('.wp-block-query.progreso');
 
@@ -607,6 +611,9 @@ function flu_core_add_visited_functionality() {
         }
 
         function trackLinkClicks() {
+            const currentPath = window.location.pathname;
+            const isVirusPage = currentPath.includes('/virus/') || currentPath.endsWith('/virus');
+
             const progressoLoops = document.querySelectorAll('.wp-block-query.progreso');
 
             progressoLoops.forEach(function(loop) {
@@ -616,8 +623,8 @@ function flu_core_add_visited_functionality() {
                     link.addEventListener('click', function(e) {
                         const listItem = this.closest('li[class*="post-"]');
                         if (listItem) {
-                            // Verificar si el virus está bloqueado
-                            if (listItem.classList.contains('locked')) {
+                            // Solo verificar bloqueo en páginas de virus
+                            if (isVirusPage && listItem.classList.contains('locked')) {
                                 e.preventDefault();
                                 e.stopPropagation();
                                 console.log('🔒 Virus bloqueado - debes capturar los anteriores primero');
@@ -906,28 +913,36 @@ function flu_core_add_visited_functionality() {
         }
 
         document.addEventListener('DOMContentLoaded', function() {
+            const currentPath = window.location.pathname;
+            const isVirusPage = currentPath.includes('/virus/') || currentPath.endsWith('/virus');
+
+            // Funciones que se ejecutan EN TODAS LAS PÁGINAS
             markVisitedElements();
-            applySequentialUnlock();
-            updateCapturedLinks();
             trackLinkClicks();
-            trackCaptureWhenAtrapado();
-            checkZoneCompletion();
-            checkAndShowRiverModals(); // Verificar y mostrar modales de ríos completados
 
-            // Mostrar insignias si las cookies ya existen
-            setTimeout(function() {
-                const argaCompleto = getCookie('arga_completado');
-                const ultzamaCompleto = getCookie('ultzama_completado');
+            // Funciones que SOLO se ejecutan en páginas /virus/
+            if (isVirusPage) {
+                applySequentialUnlock();
+                updateCapturedLinks();
+                trackCaptureWhenAtrapado();
+                checkZoneCompletion();
+                checkAndShowRiverModals();
 
-                if (argaCompleto === 'si') {
-                    console.log('🏅 ARGA ya completado, mostrando insignia...');
-                    showCompletionBadges('arga');
-                }
-                if (ultzamaCompleto === 'si') {
-                    console.log('🏅 ULTZAMA ya completado, mostrando insignia...');
-                    showCompletionBadges('ultzama');
-                }
-            }, 500);
+                // Mostrar insignias si las cookies ya existen
+                setTimeout(function() {
+                    const argaCompleto = getCookie('arga_completado');
+                    const ultzamaCompleto = getCookie('ultzama_completado');
+
+                    if (argaCompleto === 'si') {
+                        console.log('🏅 ARGA ya completado, mostrando insignia...');
+                        showCompletionBadges('arga');
+                    }
+                    if (ultzamaCompleto === 'si') {
+                        console.log('🏅 ULTZAMA ya completado, mostrando insignia...');
+                        showCompletionBadges('ultzama');
+                    }
+                }, 500);
+            }
         });
     </script>
     <?php
@@ -938,11 +953,7 @@ add_action( 'wp_footer', 'flu_core_add_visited_functionality' );
  * Update visual elements based on visited pages
  */
 function flu_core_update_progress_elements( $content ) {
-    // Only modify if on a /virus/ page AND .progreso query loop exists
-    if ( ! flu_core_is_virus_page() ) {
-        return $content;
-    }
-
+    // Modify content in ALL pages with .progreso query loop
     if ( strpos( $content, 'wp-block-query progreso' ) === false ) {
         return $content;
     }
