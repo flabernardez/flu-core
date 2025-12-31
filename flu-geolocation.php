@@ -214,6 +214,8 @@ function flu_geo_meta_box_callback( $post ) {
     $maps_url = get_post_meta( $post->ID, '_flu_geo_maps_url', true );
     $latitude = get_post_meta( $post->ID, '_flu_geo_latitude', true );
     $longitude = get_post_meta( $post->ID, '_flu_geo_longitude', true );
+    $manual_latitude = get_post_meta( $post->ID, '_flu_geo_manual_latitude', true );
+    $manual_longitude = get_post_meta( $post->ID, '_flu_geo_manual_longitude', true );
     $tolerance = get_post_meta( $post->ID, '_flu_geo_tolerance', true );
 
     if ( empty( $tolerance ) ) {
@@ -221,6 +223,19 @@ function flu_geo_meta_box_callback( $post ) {
     }
 
     echo '<table class="form-table">';
+
+    // NUEVOS CAMPOS MANUALES (PRIORITARIOS)
+    echo '<tr>';
+    echo '<th scope="row"><label for="flu_geo_manual_latitude">Coordenadas Manuales (PRIORITARIAS)</label></th>';
+    echo '<td>';
+    echo '<strong>Latitud:</strong><br>';
+    echo '<input type="number" step="0.000001" id="flu_geo_manual_latitude" name="flu_geo_manual_latitude" value="' . esc_attr( $manual_latitude ) . '" placeholder="Ej: 38.345678" style="width: 100%; max-width: 300px;" /><br><br>';
+    echo '<strong>Longitud:</strong><br>';
+    echo '<input type="number" step="0.000001" id="flu_geo_manual_longitude" name="flu_geo_manual_longitude" value="' . esc_attr( $manual_longitude ) . '" placeholder="Ej: -0.481747" style="width: 100%; max-width: 300px;" />';
+    echo '<p class="description">Si introduces coordenadas manuales, estas tendrán prioridad sobre las extraídas de Google Maps.</p>';
+    echo '</td>';
+    echo '</tr>';
+
     echo '<tr>';
     echo '<th scope="row"><label for="flu_geo_maps_url">URL de Google Maps</label></th>';
     echo '<td>';
@@ -240,9 +255,9 @@ function flu_geo_meta_box_callback( $post ) {
     echo '<tr>';
     echo '<th scope="row">Tolerancia de ubicación</th>';
     echo '<td>';
-    echo '<label for="flu_geo_tolerance_strict"><input type="radio" id="flu_geo_tolerance_strict" name="flu_geo_tolerance" value="strict" ' . checked( $tolerance, 'strict', false ) . '> Estricta (10m)</label><br>';
-    echo '<label for="flu_geo_tolerance_normal"><input type="radio" id="flu_geo_tolerance_normal" name="flu_geo_tolerance" value="normal" ' . checked( $tolerance, 'normal', false ) . '> Normal (50m)</label><br>';
-    echo '<label for="flu_geo_tolerance_amplio"><input type="radio" id="flu_geo_tolerance_amplio" name="flu_geo_tolerance" value="amplio" ' . checked( $tolerance, 'amplio', false ) . '> Amplio (200m)</label><br>';
+    echo '<label for="flu_geo_tolerance_strict"><input type="radio" id="flu_geo_tolerance_strict" name="flu_geo_tolerance" value="strict" ' . checked( $tolerance, 'strict', false ) . '> Estricta (15m)</label><br>';
+    echo '<label for="flu_geo_tolerance_normal"><input type="radio" id="flu_geo_tolerance_normal" name="flu_geo_tolerance" value="normal" ' . checked( $tolerance, 'normal', false ) . '> Normal (25m)</label><br>';
+    echo '<label for="flu_geo_tolerance_amplio"><input type="radio" id="flu_geo_tolerance_amplio" name="flu_geo_tolerance" value="amplio" ' . checked( $tolerance, 'amplio', false ) . '> Amplio (50m)</label><br>';
     echo '</td>';
     echo '</tr>';
     echo '</table>';
@@ -313,6 +328,8 @@ function flu_geo_save_meta_box_data( $post_id ) {
     $maps_url = isset( $_POST['flu_geo_maps_url'] ) ? sanitize_url( $_POST['flu_geo_maps_url'] ) : '';
     $latitude = isset( $_POST['flu_geo_latitude'] ) ? sanitize_text_field( $_POST['flu_geo_latitude'] ) : '';
     $longitude = isset( $_POST['flu_geo_longitude'] ) ? sanitize_text_field( $_POST['flu_geo_longitude'] ) : '';
+    $manual_latitude = isset( $_POST['flu_geo_manual_latitude'] ) ? sanitize_text_field( $_POST['flu_geo_manual_latitude'] ) : '';
+    $manual_longitude = isset( $_POST['flu_geo_manual_longitude'] ) ? sanitize_text_field( $_POST['flu_geo_manual_longitude'] ) : '';
     $tolerance = isset( $_POST['flu_geo_tolerance'] ) ? sanitize_text_field( $_POST['flu_geo_tolerance'] ) : 'normal';
 
     if ( ! empty( $latitude ) && ! is_numeric( $latitude ) ) {
@@ -321,10 +338,18 @@ function flu_geo_save_meta_box_data( $post_id ) {
     if ( ! empty( $longitude ) && ! is_numeric( $longitude ) ) {
         $longitude = '';
     }
+    if ( ! empty( $manual_latitude ) && ! is_numeric( $manual_latitude ) ) {
+        $manual_latitude = '';
+    }
+    if ( ! empty( $manual_longitude ) && ! is_numeric( $manual_longitude ) ) {
+        $manual_longitude = '';
+    }
 
     update_post_meta( $post_id, '_flu_geo_maps_url', $maps_url );
     update_post_meta( $post_id, '_flu_geo_latitude', $latitude );
     update_post_meta( $post_id, '_flu_geo_longitude', $longitude );
+    update_post_meta( $post_id, '_flu_geo_manual_latitude', $manual_latitude );
+    update_post_meta( $post_id, '_flu_geo_manual_longitude', $manual_longitude );
     update_post_meta( $post_id, '_flu_geo_tolerance', $tolerance );
 }
 add_action( 'save_post', 'flu_geo_save_meta_box_data' );
@@ -338,8 +363,18 @@ function flu_geo_enqueue_google_maps() {
     }
 
     $post_id = get_the_ID();
-    $latitude = get_post_meta( $post_id, '_flu_geo_latitude', true );
-    $longitude = get_post_meta( $post_id, '_flu_geo_longitude', true );
+
+    // Prioridad: coordenadas manuales primero
+    $manual_latitude = get_post_meta( $post_id, '_flu_geo_manual_latitude', true );
+    $manual_longitude = get_post_meta( $post_id, '_flu_geo_manual_longitude', true );
+
+    if ( ! empty( $manual_latitude ) && ! empty( $manual_longitude ) ) {
+        $latitude = $manual_latitude;
+        $longitude = $manual_longitude;
+    } else {
+        $latitude = get_post_meta( $post_id, '_flu_geo_latitude', true );
+        $longitude = get_post_meta( $post_id, '_flu_geo_longitude', true );
+    }
 
     if ( empty( $latitude ) || empty( $longitude ) ) {
         return;
@@ -371,21 +406,32 @@ function flu_geo_add_validation_script() {
     }
 
     $post_id = get_the_ID();
-    $latitude = get_post_meta( $post_id, '_flu_geo_latitude', true );
-    $longitude = get_post_meta( $post_id, '_flu_geo_longitude', true );
+
+    // Prioridad: coordenadas manuales primero
+    $manual_latitude = get_post_meta( $post_id, '_flu_geo_manual_latitude', true );
+    $manual_longitude = get_post_meta( $post_id, '_flu_geo_manual_longitude', true );
+
+    if ( ! empty( $manual_latitude ) && ! empty( $manual_longitude ) ) {
+        $latitude = $manual_latitude;
+        $longitude = $manual_longitude;
+    } else {
+        $latitude = get_post_meta( $post_id, '_flu_geo_latitude', true );
+        $longitude = get_post_meta( $post_id, '_flu_geo_longitude', true );
+    }
+
     $tolerance = get_post_meta( $post_id, '_flu_geo_tolerance', true );
 
     if ( empty( $latitude ) || empty( $longitude ) ) {
         return;
     }
 
-    $tolerance_meters = 50;
+    $tolerance_meters = 25;
     switch ( $tolerance ) {
         case 'strict':
-            $tolerance_meters = 10;
+            $tolerance_meters = 15;
             break;
         case 'amplio':
-            $tolerance_meters = 200;
+            $tolerance_meters = 50;
             break;
     }
 
