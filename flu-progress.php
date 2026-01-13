@@ -2,7 +2,8 @@
 /**
  * Progress tracking functionality for Fluvial Core
  * Track visited pages using cookies and update visual elements
- * ONLY applies to pages under /virus/ hierarchy
+ * ONLY applies to pages under /virus/ hierarchy (or translations like /birusa-goian/)
+ * COMPATIBLE CON POLYLANG - Progreso compartido entre idiomas
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -10,7 +11,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Check if current page is under /virus/ hierarchy
+ * Check if current page is under /virus/ hierarchy (any language)
  */
 function flu_core_is_virus_page() {
     if ( ! is_page() ) {
@@ -19,12 +20,26 @@ function flu_core_is_virus_page() {
 
     $current_page = get_post( get_the_ID() );
 
-    // Check if current page or any ancestor is named 'virus'
+    // Check if current page or any ancestor is the virus parent page
     $page_to_check = $current_page;
     while ( $page_to_check ) {
-        if ( $page_to_check->post_name === 'virus' ) {
+        // Get all translations of this page
+        if ( function_exists( 'pll_get_post_translations' ) ) {
+            $translations = pll_get_post_translations( $page_to_check->ID );
+            foreach ( $translations as $translated_page_id ) {
+                $translated_page = get_post( $translated_page_id );
+                // Check if any translation slug is 'virus' or 'birusa-goian' or any variant
+                if ( in_array( $translated_page->post_name, array( 'virus', 'birusa-goian' ) ) ) {
+                    return true;
+                }
+            }
+        }
+
+        // Fallback: check current page slug directly
+        if ( in_array( $page_to_check->post_name, array( 'virus', 'birusa-goian' ) ) ) {
             return true;
         }
+
         if ( $page_to_check->post_parent ) {
             $page_to_check = get_post( $page_to_check->post_parent );
         } else {
@@ -33,6 +48,75 @@ function flu_core_is_virus_page() {
     }
 
     return false;
+}
+
+/**
+ * Get the original page ID (canonical language version)
+ * This ensures cookies work across all languages
+ */
+function flu_core_get_canonical_page_id( $page_id ) {
+    if ( ! function_exists( 'pll_get_post_translations' ) ) {
+        return $page_id;
+    }
+
+    // Get all translations
+    $translations = pll_get_post_translations( $page_id );
+
+    // Get the default language
+    $default_lang = function_exists( 'pll_default_language' ) ? pll_default_language() : 'es';
+
+    // Return the ID of the default language version, or first available
+    if ( isset( $translations[ $default_lang ] ) ) {
+        return $translations[ $default_lang ];
+    }
+
+    // If default not found, return the first translation ID
+    return !empty( $translations ) ? reset( $translations ) : $page_id;
+}
+
+/**
+ * Get parent page ID for a zone (arga or ultzama) in any language
+ */
+function flu_core_get_zone_parent_id( $zone_slug ) {
+    // Try to find by slug in current language
+    $page = get_page_by_path( $zone_slug );
+
+    if ( ! $page ) {
+        // Try common parent paths
+        $possible_paths = array(
+            'virus/' . $zone_slug,
+            'birusa-goian/' . $zone_slug
+        );
+
+        foreach ( $possible_paths as $path ) {
+            $page = get_page_by_path( $path );
+            if ( $page ) break;
+        }
+    }
+
+    // If we have Polylang, search in all languages
+    if ( ! $page && function_exists( 'pll_languages_list' ) ) {
+        $languages = pll_languages_list();
+
+        foreach ( $languages as $lang ) {
+            // Search for pages with this slug in this language
+            $args = array(
+                'post_type' => 'page',
+                'name' => $zone_slug,
+                'posts_per_page' => 1,
+                'lang' => $lang
+            );
+
+            $query = new WP_Query( $args );
+
+            if ( $query->have_posts() ) {
+                $page = $query->posts[0];
+                break;
+            }
+        }
+    }
+
+    return $page ? $page->ID : null;
 }
 
 /**
@@ -215,6 +299,8 @@ function flu_core_track_page_visit() {
     }
 
     $current_page_id = get_the_ID();
+    $canonical_page_id = flu_core_get_canonical_page_id( $current_page_id );
+
     $cookie_name = 'flu_visited_pages';
     $captured_cookie_name = 'flu_captured_pages';
     $visited = [];
@@ -237,8 +323,9 @@ function flu_core_track_page_visit() {
     }
 
     // Add current page if not already visited - APPLIES TO ALL PAGES
-    if ( ! in_array( $current_page_id, $visited ) ) {
-        $visited[] = $current_page_id;
+    // Use canonical ID so all translations share the same cookie
+    if ( ! in_array( $canonical_page_id, $visited ) ) {
+        $visited[] = $canonical_page_id;
 
         // Set cookie for 1 year
         $expire_time = time() + ( 365 * 24 * 60 * 60 ); // 1 year
@@ -248,8 +335,8 @@ function flu_core_track_page_visit() {
     // Check if URL contains #atrapado and track capture - ONLY FOR VIRUS PAGES
     if ( flu_core_is_virus_page() ) {
         if ( isset( $_SERVER['REQUEST_URI'] ) && strpos( $_SERVER['REQUEST_URI'], '#atrapado' ) !== false ) {
-            if ( ! in_array( $current_page_id, $captured ) ) {
-                $captured[] = $current_page_id;
+            if ( ! in_array( $canonical_page_id, $captured ) ) {
+                $captured[] = $canonical_page_id;
                 setcookie( $captured_cookie_name, json_encode( $captured ), $expire_time, '/' );
             }
         }
@@ -267,6 +354,8 @@ function flu_core_ajax_track_visit() {
         wp_send_json_error( 'Invalid page ID' );
     }
 
+    $canonical_page_id = flu_core_get_canonical_page_id( $page_id );
+
     $cookie_name = 'flu_visited_pages';
     $visited = [];
 
@@ -278,9 +367,9 @@ function flu_core_ajax_track_visit() {
         }
     }
 
-    // Add page if not already visited
-    if ( ! in_array( $page_id, $visited ) ) {
-        $visited[] = $page_id;
+    // Add page if not already visited (use canonical ID)
+    if ( ! in_array( $canonical_page_id, $visited ) ) {
+        $visited[] = $canonical_page_id;
 
         // Set cookie for 1 year
         $expire_time = time() + ( 365 * 24 * 60 * 60 );
@@ -302,6 +391,8 @@ function flu_core_ajax_track_capture() {
         wp_send_json_error( 'Invalid page ID' );
     }
 
+    $canonical_page_id = flu_core_get_canonical_page_id( $page_id );
+
     $cookie_name = 'flu_captured_pages';
     $captured = [];
 
@@ -313,9 +404,9 @@ function flu_core_ajax_track_capture() {
         }
     }
 
-    // Add page if not already captured
-    if ( ! in_array( $page_id, $captured ) ) {
-        $captured[] = $page_id;
+    // Add page if not already captured (use canonical ID)
+    if ( ! in_array( $canonical_page_id, $captured ) ) {
+        $captured[] = $canonical_page_id;
 
         // Set cookie for 1 year
         $expire_time = time() + ( 365 * 24 * 60 * 60 );
@@ -342,22 +433,15 @@ function flu_core_ajax_check_zone_completion() {
         }
     }
 
-    error_log( '=== ZONE COMPLETION CHECK ===' );
-    error_log( 'Captured pages: ' . print_r( $captured, true ) );
+    error_log( '=== ZONE COMPLETION CHECK (POLYLANG) ===' );
+    error_log( 'Captured pages (canonical IDs): ' . print_r( $captured, true ) );
 
-    // Get parent pages
-    $arga_parent = get_page_by_path( 'virus/arga' );
-    $ultzama_parent = get_page_by_path( 'virus/ultzama' );
+    // Get parent page IDs for zones
+    $arga_parent_id = flu_core_get_zone_parent_id( 'arga' );
+    $ultzama_parent_id = flu_core_get_zone_parent_id( 'ultzama' );
 
-    if ( ! $arga_parent ) {
-        $arga_parent = get_page_by_path( 'arga' );
-    }
-    if ( ! $ultzama_parent ) {
-        $ultzama_parent = get_page_by_path( 'ultzama' );
-    }
-
-    error_log( 'ARGA parent found: ' . ( $arga_parent ? $arga_parent->ID : 'NO' ) );
-    error_log( 'ULTZAMA parent found: ' . ( $ultzama_parent ? $ultzama_parent->ID : 'NO' ) );
+    error_log( 'ARGA parent ID: ' . ( $arga_parent_id ?: 'NOT FOUND' ) );
+    error_log( 'ULTZAMA parent ID: ' . ( $ultzama_parent_id ?: 'NOT FOUND' ) );
 
     $expire_time = time() + ( 365 * 24 * 60 * 60 );
 
@@ -370,20 +454,29 @@ function flu_core_ajax_check_zone_completion() {
     );
 
     // Check ARGA
-    if ( $arga_parent ) {
-        $arga_children = get_posts( array(
+    if ( $arga_parent_id ) {
+        $arga_children_posts = get_posts( array(
             'post_type' => 'page',
-            'post_parent' => $arga_parent->ID,
+            'post_parent' => $arga_parent_id,
             'post_status' => 'publish',
             'numberposts' => -1,
-            'fields' => 'ids',
             'orderby' => 'menu_order',
-            'order' => 'ASC'
+            'order' => 'ASC',
+            'suppress_filters' => false // Important for Polylang
         ) );
+
+        // Get canonical IDs for all children
+        $arga_children = array();
+        foreach ( $arga_children_posts as $child ) {
+            $canonical_id = flu_core_get_canonical_page_id( $child->ID );
+            if ( ! in_array( $canonical_id, $arga_children ) ) {
+                $arga_children[] = $canonical_id;
+            }
+        }
 
         $response['arga_children'] = $arga_children;
 
-        error_log( 'ARGA children IDs: ' . print_r( $arga_children, true ) );
+        error_log( 'ARGA children (canonical IDs): ' . print_r( $arga_children, true ) );
         error_log( 'ARGA children count: ' . count( $arga_children ) );
 
         // Check if all arga viruses are captured
@@ -402,20 +495,29 @@ function flu_core_ajax_check_zone_completion() {
     }
 
     // Check ULTZAMA
-    if ( $ultzama_parent ) {
-        $ultzama_children = get_posts( array(
+    if ( $ultzama_parent_id ) {
+        $ultzama_children_posts = get_posts( array(
             'post_type' => 'page',
-            'post_parent' => $ultzama_parent->ID,
+            'post_parent' => $ultzama_parent_id,
             'post_status' => 'publish',
             'numberposts' => -1,
-            'fields' => 'ids',
             'orderby' => 'menu_order',
-            'order' => 'ASC'
+            'order' => 'ASC',
+            'suppress_filters' => false // Important for Polylang
         ) );
+
+        // Get canonical IDs for all children
+        $ultzama_children = array();
+        foreach ( $ultzama_children_posts as $child ) {
+            $canonical_id = flu_core_get_canonical_page_id( $child->ID );
+            if ( ! in_array( $canonical_id, $ultzama_children ) ) {
+                $ultzama_children[] = $canonical_id;
+            }
+        }
 
         $response['ultzama_children'] = $ultzama_children;
 
-        error_log( 'ULTZAMA children IDs: ' . print_r( $ultzama_children, true ) );
+        error_log( 'ULTZAMA children (canonical IDs): ' . print_r( $ultzama_children, true ) );
         error_log( 'ULTZAMA children count: ' . count( $ultzama_children ) );
 
         // Check if all ultzama viruses are captured
@@ -478,6 +580,20 @@ function flu_core_add_visited_functionality() {
             return [];
         }
 
+        // Get canonical page ID from data attribute
+        function getCanonicalPageId(element) {
+            // Try to get from data-canonical-id attribute first
+            const canonicalId = element.getAttribute('data-canonical-id');
+            if (canonicalId) {
+                return parseInt(canonicalId);
+            }
+
+            // Fallback to post-{id} class
+            const classList = element.className;
+            const match = classList.match(/post-(\d+)/);
+            return match ? parseInt(match[1]) : null;
+        }
+
         function markVisitedElements() {
             const visitedPages = getVisitedPages();
             const capturedPages = getCapturedPages();
@@ -487,12 +603,9 @@ function flu_core_add_visited_functionality() {
                 const listItems = loop.querySelectorAll('li[class*="post-"]');
 
                 listItems.forEach(function(li) {
-                    const classList = li.className;
-                    const match = classList.match(/post-(\d+)/);
+                    const pageId = getCanonicalPageId(li);
 
-                    if (match && match[1]) {
-                        const pageId = parseInt(match[1]);
-
+                    if (pageId) {
                         if (visitedPages.includes(pageId)) {
                             li.classList.add('visited');
                         }
@@ -508,14 +621,14 @@ function flu_core_add_visited_functionality() {
         function applySequentialUnlock() {
             // Solo aplicar bloqueo secuencial en páginas de virus
             const currentPath = window.location.pathname;
-            const isVirusPage = currentPath.includes('/virus/') || currentPath.endsWith('/virus');
+            const isVirusPage = currentPath.includes('/virus/') || currentPath.includes('/birusa-goian/');
 
             if (!isVirusPage) {
-                console.log('🔓 No estamos en /virus/ - todos los enlaces desbloqueados');
-                return; // No aplicar bloqueo fuera de /virus/
+                console.log('🔓 No estamos en página de virus - todos los enlaces desbloqueados');
+                return;
             }
 
-            console.log('🔓 Aplicando desbloqueo secuencial (solo en /virus/)');
+            console.log('🔓 Aplicando desbloqueo secuencial');
             const capturedPages = getCapturedPages();
             const progressoLoops = document.querySelectorAll('.wp-block-query.progreso');
 
@@ -524,38 +637,29 @@ function flu_core_add_visited_functionality() {
 
                 console.log('📋 Lista de virus encontrados:', listItems.length);
 
-                // Encontrar el primer virus no capturado
                 let nextUnlocked = -1;
                 for (let i = 0; i < listItems.length; i++) {
                     const li = listItems[i];
-                    const match = li.className.match(/post-(\d+)/);
+                    const pageId = getCanonicalPageId(li);
 
-                    if (match && match[1]) {
-                        const pageId = parseInt(match[1]);
-
-                        if (!capturedPages.includes(pageId)) {
-                            nextUnlocked = i;
-                            console.log('🎯 Próximo virus a desbloquear: índice', i, 'ID', pageId);
-                            break;
-                        }
+                    if (pageId && !capturedPages.includes(pageId)) {
+                        nextUnlocked = i;
+                        console.log('🎯 Próximo virus a desbloquear: índice', i, 'ID', pageId);
+                        break;
                     }
                 }
 
-                // Si no hay ninguno sin capturar, todos están desbloqueados
                 if (nextUnlocked === -1) {
                     nextUnlocked = listItems.length;
                     console.log('✅ Todos los virus capturados');
                 }
 
-                // Bloquear/desbloquear según el orden
                 listItems.forEach(function(li, index) {
-                    const match = li.className.match(/post-(\d+)/);
+                    const pageId = getCanonicalPageId(li);
 
-                    if (match && match[1]) {
-                        const pageId = parseInt(match[1]);
+                    if (pageId) {
                         const isCaptured = capturedPages.includes(pageId);
 
-                        // Desbloquear si está capturado O si es el siguiente en la secuencia
                         if (isCaptured || index === nextUnlocked) {
                             li.classList.remove('locked');
                             li.classList.add('unlocked');
@@ -578,33 +682,24 @@ function flu_core_add_visited_functionality() {
                 const listItems = loop.querySelectorAll('li[class*="post-"]');
 
                 listItems.forEach(function(li) {
-                    const classList = li.className;
-                    const match = classList.match(/post-(\d+)/);
+                    const pageId = getCanonicalPageId(li);
 
-                    if (match && match[1]) {
-                        const pageId = parseInt(match[1]);
+                    if (pageId && capturedPages.includes(pageId)) {
+                        const links = li.querySelectorAll('a[href]');
 
-                        // Si el virus está capturado, modificar todos los enlaces dentro del <li>
-                        if (capturedPages.includes(pageId)) {
-                            const links = li.querySelectorAll('a[href]');
+                        links.forEach(function(link) {
+                            const href = link.getAttribute('href');
 
-                            links.forEach(function(link) {
-                                const href = link.getAttribute('href');
+                            if (href && !href.startsWith('#') && !href.startsWith('mailto:') && !href.startsWith('tel:')) {
+                                const cleanHref = href.split('#')[0];
+                                const newHref = cleanHref + '#capturado';
 
-                                // Solo modificar si el href apunta a una página (no a anclas o externos)
-                                if (href && !href.startsWith('#') && !href.startsWith('mailto:') && !href.startsWith('tel:')) {
-                                    // Eliminar cualquier hash existente y añadir #capturado
-                                    const cleanHref = href.split('#')[0];
-                                    const newHref = cleanHref + '#capturado';
-
-                                    // Solo actualizar si es diferente
-                                    if (href !== newHref) {
-                                        link.setAttribute('href', newHref);
-                                        console.log('Link actualizado para virus capturado:', pageId, '->', newHref);
-                                    }
+                                if (href !== newHref) {
+                                    link.setAttribute('href', newHref);
+                                    console.log('Link actualizado para virus capturado:', pageId, '->', newHref);
                                 }
-                            });
-                        }
+                            }
+                        });
                     }
                 });
             });
@@ -612,7 +707,7 @@ function flu_core_add_visited_functionality() {
 
         function trackLinkClicks() {
             const currentPath = window.location.pathname;
-            const isVirusPage = currentPath.includes('/virus/') || currentPath.endsWith('/virus');
+            const isVirusPage = currentPath.includes('/virus/') || currentPath.includes('/birusa-goian/');
 
             const progressoLoops = document.querySelectorAll('.wp-block-query.progreso');
 
@@ -623,7 +718,6 @@ function flu_core_add_visited_functionality() {
                     link.addEventListener('click', function(e) {
                         const listItem = this.closest('li[class*="post-"]');
                         if (listItem) {
-                            // Solo verificar bloqueo en páginas de virus
                             if (isVirusPage && listItem.classList.contains('locked')) {
                                 e.preventDefault();
                                 e.stopPropagation();
@@ -631,13 +725,9 @@ function flu_core_add_visited_functionality() {
                                 return false;
                             }
 
-                            const classList = listItem.className;
-                            const match = classList.match(/post-(\d+)/);
+                            const pageId = getCanonicalPageId(listItem);
 
-                            if (match && match[1]) {
-                                const pageId = match[1];
-
-                                // Track via AJAX
+                            if (pageId) {
                                 const xhr = new XMLHttpRequest();
                                 xhr.open('POST', '<?php echo admin_url('admin-ajax.php'); ?>');
                                 xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
@@ -652,7 +742,6 @@ function flu_core_add_visited_functionality() {
         }
 
         function trackCaptureWhenAtrapado() {
-            // Check if current page has #atrapado in URL and track it
             if (window.location.hash === '#atrapado') {
                 const currentPageId = document.body.className.match(/page-id-(\d+)/);
                 if (currentPageId && currentPageId[1]) {
@@ -663,7 +752,6 @@ function flu_core_add_visited_functionality() {
                     const data = 'action=flu_core_track_capture&page_id=' + currentPageId[1];
                     xhr.send(data);
 
-                    // Actualizar los enlaces después de capturar
                     xhr.onload = function() {
                         if (xhr.status === 200) {
                             console.log('Virus capturado, actualizando enlaces y verificando zonas...');
@@ -672,13 +760,17 @@ function flu_core_add_visited_functionality() {
                                 applySequentialUnlock();
                                 updateCapturedLinks();
                                 checkZoneCompletion();
+
+                                // Verificar si se completó algún río después de capturar
+                                setTimeout(function() {
+                                    checkAndShowRiverModalsAfterCapture();
+                                }, 500);
                             }, 100);
                         }
                     };
                 }
             }
 
-            // Listen for hash changes to detect when someone reaches #atrapado
             window.addEventListener('hashchange', function() {
                 if (window.location.hash === '#atrapado') {
                     const currentPageId = document.body.className.match(/page-id-(\d+)/);
@@ -690,7 +782,6 @@ function flu_core_add_visited_functionality() {
                         const data = 'action=flu_core_track_capture&page_id=' + currentPageId[1];
                         xhr.send(data);
 
-                        // Actualizar los enlaces después de capturar
                         xhr.onload = function() {
                             if (xhr.status === 200) {
                                 console.log('Virus capturado, actualizando enlaces y verificando zonas...');
@@ -699,6 +790,11 @@ function flu_core_add_visited_functionality() {
                                     applySequentialUnlock();
                                     updateCapturedLinks();
                                     checkZoneCompletion();
+
+                                    // Verificar si se completó algún río después de capturar
+                                    setTimeout(function() {
+                                        checkAndShowRiverModalsAfterCapture();
+                                    }, 500);
                                 }, 100);
                             }
                         };
@@ -707,8 +803,48 @@ function flu_core_add_visited_functionality() {
             });
         }
 
+        function checkAndShowRiverModalsAfterCapture() {
+            console.log('🔍 Verificando ríos completados después de captura...');
+
+            const argaCompleto = getCookie('arga_completado');
+            const ultzamaCompleto = getCookie('ultzama_completado');
+            const bothComplete = (argaCompleto === 'si' && ultzamaCompleto === 'si');
+
+            const argaModalShown = getCookie('flu_arga_modal_shown');
+            const ultzamaModalShown = getCookie('flu_ultzama_modal_shown');
+
+            // Si ambos están completos, mostrar el modal del que no se ha mostrado
+            if (bothComplete) {
+                if (argaCompleto === 'si' && argaModalShown !== 'si') {
+                    console.log('🎉 ¡ARGA completado! Mostrando modal...');
+                    showRiverCompleteModal('arga', true);
+                } else if (ultzamaCompleto === 'si' && ultzamaModalShown !== 'si') {
+                    console.log('🎉 ¡ULTZAMA completado! Mostrando modal...');
+                    showRiverCompleteModal('ultzama', true);
+                }
+            } else {
+                // Mostrar modal individual si se completó uno
+                if (argaCompleto === 'si' && argaModalShown !== 'si') {
+                    console.log('🎉 ¡ARGA completado! Mostrando modal...');
+                    showRiverCompleteModal('arga', false);
+                }
+
+                if (ultzamaCompleto === 'si' && ultzamaModalShown !== 'si') {
+                    console.log('🎉 ¡ULTZAMA completado! Mostrando modal...');
+                    setTimeout(function() {
+                        showRiverCompleteModal('ultzama', false);
+                    }, argaCompleto === 'si' ? 500 : 0);
+                }
+            }
+        }
+
         function checkZoneCompletion() {
             console.log('🔍 Verificando completitud de zonas...');
+
+            // Guardar estado anterior de las cookies
+            const argaCompletoBefore = getCookie('arga_completado');
+            const ultzamaCompletoBefore = getCookie('ultzama_completado');
+
             const xhr = new XMLHttpRequest();
             xhr.open('POST', '<?php echo admin_url('admin-ajax.php'); ?>');
             xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
@@ -725,29 +861,35 @@ function flu_core_add_visited_functionality() {
                         if (response.success && response.data) {
                             const data = response.data;
 
-                            console.log('📊 ARGA:');
-                            console.log('  - Hijos:', data.arga_children);
-                            console.log('  - Estado:', data.arga_status);
-
-                            console.log('📊 ULTZAMA:');
-                            console.log('  - Hijos:', data.ultzama_children);
-                            console.log('  - Estado:', data.ultzama_status);
-
-                            console.log('📊 Capturados:', data.captured);
+                            console.log('📊 ARGA:', data.arga_status);
+                            console.log('📊 ULTZAMA:', data.ultzama_status);
                         }
 
-                        // Verificar si se crearon las cookies
-                        const argaCompleto = getCookie('arga_completado');
-                        const ultzamaCompleto = getCookie('ultzama_completado');
+                        // Verificar estado actual de las cookies
+                        const argaCompletoAfter = getCookie('arga_completado');
+                        const ultzamaCompletoAfter = getCookie('ultzama_completado');
 
-                        console.log('🍪 Cookie arga_completado:', argaCompleto || 'no existe');
-                        console.log('🍪 Cookie ultzama_completado:', ultzamaCompleto || 'no existe');
+                        // Detectar si alguna zona se acaba de completar
+                        const argaJustCompleted = (argaCompletoBefore !== 'si' && argaCompletoAfter === 'si');
+                        const ultzamaJustCompleted = (ultzamaCompletoBefore !== 'si' && ultzamaCompletoAfter === 'si');
 
-                        if (argaCompleto === 'si') {
+                        if (argaJustCompleted || ultzamaJustCompleted) {
+                            console.log('🔄 ¡Zona completada! Recargando página para mostrar medallita...');
+
+                            // Pequeño delay para que se vea el modal si está apareciendo
+                            setTimeout(function() {
+                                location.reload();
+                            }, 1000);
+
+                            return; // No seguir ejecutando, vamos a recargar
+                        }
+
+                        // Si ya estaban completadas antes, solo mostrar badges sin recargar
+                        if (argaCompletoAfter === 'si') {
                             console.log('🎉 ¡ARGA COMPLETADO!');
                             showCompletionBadges('arga');
                         }
-                        if (ultzamaCompleto === 'si') {
+                        if (ultzamaCompletoAfter === 'si') {
                             console.log('🎉 ¡ULTZAMA COMPLETADO!');
                             showCompletionBadges('ultzama');
                         }
@@ -756,35 +898,24 @@ function flu_core_add_visited_functionality() {
                     }
                 }
             };
-
-            xhr.onerror = function() {
-                console.error('❌ Error en la petición AJAX');
-            };
         }
 
         function showCompletionBadges(zone) {
-            // Buscar elementos que tengan clases o atributos relacionados con la zona
             console.log('🏅 Mostrando insignias de completitud para:', zone);
 
-            // Buscar por clase (ej: .arga-completado, .ultzama-completado)
             const badgesByClass = document.querySelectorAll('.' + zone + '-completado');
             badgesByClass.forEach(function(badge) {
                 badge.style.display = 'block';
-                console.log('  ✓ Mostrando badge por clase:', badge);
             });
 
-            // Buscar por atributo data (ej: data-zone="arga")
             const badgesByData = document.querySelectorAll('[data-zone="' + zone + '"]');
             badgesByData.forEach(function(badge) {
                 badge.style.display = 'block';
-                console.log('  ✓ Mostrando badge por data-zone:', badge);
             });
 
-            // Buscar imágenes con alt que contenga el nombre de la zona
             const images = document.querySelectorAll('img[alt*="' + zone + '"]');
             images.forEach(function(img) {
                 img.style.display = 'block';
-                console.log('  ✓ Mostrando imagen:', img.alt);
             });
         }
 
@@ -795,14 +926,17 @@ function flu_core_add_visited_functionality() {
         }
 
         function showRiverCompleteModal(riverName, bothComplete) {
-            // Verificar si ya mostramos este modal antes
             const cookieName = 'flu_' + riverName + '_modal_shown';
             if (getCookie(cookieName) === 'si') {
                 console.log('Modal de', riverName, 'ya mostrado anteriormente');
                 return;
             }
 
-            console.log('🎉 Mostrando modal de río completado:', riverName, '- Ambos completos:', bothComplete);
+            console.log('🎉 Mostrando modal de río completado:', riverName);
+
+            // Detectar idioma desde la URL
+            const currentPath = window.location.pathname;
+            const isEuskera = currentPath.includes('/eu/');
 
             const overlay = document.createElement('div');
             overlay.className = 'river-complete-overlay';
@@ -816,21 +950,27 @@ function flu_core_add_visited_functionality() {
 
             const title = document.createElement('div');
             title.className = 'river-complete-title';
-            title.textContent = '¡Río limpio!';
+
+            // Título según idioma
+            title.textContent = isEuskera ? 'Ibaia garbi!' : '¡Río limpio!';
 
             const text = document.createElement('div');
             text.className = 'river-complete-text';
 
-            // Si ambos ríos están completos, mostrar mensaje especial
+            // Texto según idioma y si ambos ríos están completos
             if (bothComplete) {
-                text.textContent = '¡Terminaste de limpiar los ríos de virus! Enhorabuena';
+                text.textContent = isEuskera
+                    ? 'Ibaietako birusak garbitzen amaitu duzu! Zorionak!'
+                    : '¡Terminaste de limpiar los ríos de virus! Enhorabuena';
             } else {
-                text.textContent = 'Has conseguido limpiar el río ' + riverName.toUpperCase() + ' de virus. ¡Enhorabuena!';
+                text.textContent = isEuskera
+                    ? riverName.toUpperCase() + ' ibaia birusetatik garbitzen lortu duzu. Zorionak!'
+                    : 'Has conseguido limpiar el río ' + riverName.toUpperCase() + ' de virus. ¡Enhorabuena!';
             }
 
             const button = document.createElement('button');
             button.className = 'river-complete-button';
-            button.textContent = 'Cerrar';
+            button.textContent = isEuskera ? 'Itxi' : 'Cerrar';
 
             modal.appendChild(emoji);
             modal.appendChild(title);
@@ -839,15 +979,12 @@ function flu_core_add_visited_functionality() {
             overlay.appendChild(modal);
             document.body.appendChild(overlay);
 
-            // Mostrar con animación
             setTimeout(function() {
                 overlay.classList.add('show');
             }, 100);
 
-            // Guardar que ya mostramos este modal
             setCookie(cookieName, 'si', 365);
 
-            // Cerrar al hacer click en el botón
             button.addEventListener('click', function() {
                 overlay.classList.remove('show');
                 setTimeout(function() {
@@ -855,7 +992,6 @@ function flu_core_add_visited_functionality() {
                 }, 300);
             });
 
-            // Cerrar al hacer click fuera del modal
             overlay.addEventListener('click', function(e) {
                 if (e.target === overlay) {
                     overlay.classList.remove('show');
@@ -867,42 +1003,33 @@ function flu_core_add_visited_functionality() {
         }
 
         function checkAndShowRiverModals() {
-            // Solo mostrar en la página /virus/
             const currentPath = window.location.pathname;
-            if (!currentPath.includes('/virus/') && !currentPath.endsWith('/virus')) {
+            if (!currentPath.includes('/virus/') && !currentPath.includes('/birusa-goian/')) {
                 return;
             }
 
-            console.log('📍 Estamos en /virus/, verificando ríos completados...');
+            console.log('📍 Estamos en página de virus, verificando ríos completados...');
 
             const argaCompleto = getCookie('arga_completado');
             const ultzamaCompleto = getCookie('ultzama_completado');
             const bothComplete = (argaCompleto === 'si' && ultzamaCompleto === 'si');
 
-            console.log('🏆 Ambos ríos completos:', bothComplete);
-
-            // Pequeño delay para que se vea bien la transición
             setTimeout(function() {
-                // Determinar cuál modal mostrar
                 const argaModalShown = getCookie('flu_arga_modal_shown');
                 const ultzamaModalShown = getCookie('flu_ultzama_modal_shown');
 
-                // Si ambos ríos están completos
                 if (bothComplete) {
-                    // Mostrar modal del último río completado (el que no tiene modal mostrado)
                     if (argaCompleto === 'si' && argaModalShown !== 'si') {
                         showRiverCompleteModal('arga', true);
                     } else if (ultzamaCompleto === 'si' && ultzamaModalShown !== 'si') {
                         showRiverCompleteModal('ultzama', true);
                     }
                 } else {
-                    // Comportamiento normal: mostrar modal individual por río
                     if (argaCompleto === 'si') {
                         showRiverCompleteModal('arga', false);
                     }
 
                     if (ultzamaCompleto === 'si') {
-                        // Si arga ya mostró modal, esperar un poco más
                         const delay = argaCompleto === 'si' ? 500 : 0;
                         setTimeout(function() {
                             showRiverCompleteModal('ultzama', false);
@@ -912,33 +1039,78 @@ function flu_core_add_visited_functionality() {
             }, 800);
         }
 
+        // Verificar zona completada periódicamente en páginas padre
+        function checkZoneOnReturn() {
+            const currentPath = window.location.pathname;
+
+            // Función que verifica si estamos en página padre de virus
+            function isVirusParentPage() {
+                // Detectar si estamos en /virus o /virus/ o /eu/birusa-goian o /eu/birusa-goian/
+                const pathParts = currentPath.split('/').filter(p => p);
+                const lastPart = pathParts[pathParts.length - 1];
+
+                return lastPart === 'virus' || lastPart === 'birusa-goian';
+            }
+
+            // Verificar al cambiar hash
+            window.addEventListener('hashchange', function() {
+                if (isVirusParentPage()) {
+                    console.log('🔄 Hash cambió en página padre, verificando completitud...');
+
+                    checkZoneCompletion();
+
+                    setTimeout(function() {
+                        checkAndShowRiverModals();
+                    }, 500);
+                }
+            });
+
+            // Verificar también al cargar la página si estamos en página padre
+            if (isVirusParentPage()) {
+                console.log('🔄 Página padre cargada, verificando completitud...');
+
+                // Verificar periódicamente (por si vienen de misiones intermedias)
+                let verificationCount = 0;
+                const verificationInterval = setInterval(function() {
+                    checkZoneCompletion();
+                    verificationCount++;
+
+                    // Verificar 3 veces: al cargar, después de 1s y después de 2s
+                    if (verificationCount >= 3) {
+                        clearInterval(verificationInterval);
+
+                        // Después de las verificaciones, mostrar modal si corresponde
+                        setTimeout(function() {
+                            checkAndShowRiverModals();
+                        }, 300);
+                    }
+                }, 1000);
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
             const currentPath = window.location.pathname;
-            const isVirusPage = currentPath.includes('/virus/') || currentPath.endsWith('/virus');
+            const isVirusPage = currentPath.includes('/virus/') || currentPath.includes('/birusa-goian/');
 
-            // Funciones que se ejecutan EN TODAS LAS PÁGINAS
             markVisitedElements();
             trackLinkClicks();
 
-            // Funciones que SOLO se ejecutan en páginas /virus/
             if (isVirusPage) {
                 applySequentialUnlock();
                 updateCapturedLinks();
                 trackCaptureWhenAtrapado();
                 checkZoneCompletion();
                 checkAndShowRiverModals();
+                checkZoneOnReturn(); // ← NUEVA FUNCIÓN para verificar al volver
 
-                // Mostrar insignias si las cookies ya existen
                 setTimeout(function() {
                     const argaCompleto = getCookie('arga_completado');
                     const ultzamaCompleto = getCookie('ultzama_completado');
 
                     if (argaCompleto === 'si') {
-                        console.log('🏅 ARGA ya completado, mostrando insignia...');
                         showCompletionBadges('arga');
                     }
                     if (ultzamaCompleto === 'si') {
-                        console.log('🏅 ULTZAMA ya completado, mostrando insignia...');
                         showCompletionBadges('ultzama');
                     }
                 }, 500);
@@ -980,33 +1152,38 @@ function flu_core_update_progress_elements( $content ) {
 
     $xpath = new DOMXPath( $dom );
 
-    // Find all <li> elements in .progreso query loops
+    // Find all <li> elements in .progreso query loops and add canonical ID as data attribute
     foreach ( $xpath->query( "//div[contains(@class, 'wp-block-query') and contains(@class, 'progreso')]//li[contains(@class, 'post-')]" ) as $li ) {
         // Get post/page ID from class "post-123"
         preg_match( '/post-(\d+)/', $li->getAttribute( 'class' ), $matches );
         $post_id = isset( $matches[1] ) ? intval( $matches[1] ) : 0;
 
-        if ( $post_id && in_array( $post_id, $visited ) ) {
-            // Change .wp-block-separator background color
-            foreach ( $xpath->query( ".//*[contains(@class, 'wp-block-separator') and contains(@class, 'has-custom-white-background-color')]", $li ) as $separator ) {
-                $class = $separator->getAttribute( 'class' );
-                $class = str_replace( 'has-custom-white-background-color', 'has-custom-green-background-color', $class );
-                $separator->setAttribute( 'class', $class );
-            }
+        if ( $post_id ) {
+            // Get canonical ID and add as data attribute
+            $canonical_id = flu_core_get_canonical_page_id( $post_id );
+            $li->setAttribute( 'data-canonical-id', $canonical_id );
 
-            // Update wp-block-group elements
-            foreach ( $xpath->query( ".//*[contains(@class, 'wp-block-group') and contains(@class, 'has-border-color') and contains(@class, 'has-custom-green-color')]", $li ) as $group ) {
-                $class = $group->getAttribute( 'class' );
-
-                // Add green background and white text classes if not present
-                if ( strpos( $class, 'has-custom-green-background-color' ) === false ) {
-                    $class .= ' has-custom-green-background-color';
-                }
-                if ( strpos( $class, 'has-custom-white-color' ) === false ) {
-                    $class .= ' has-custom-white-color';
+            if ( in_array( $canonical_id, $visited ) ) {
+                // Change .wp-block-separator background color
+                foreach ( $xpath->query( ".//*[contains(@class, 'wp-block-separator') and contains(@class, 'has-custom-white-background-color')]", $li ) as $separator ) {
+                    $class = $separator->getAttribute( 'class' );
+                    $class = str_replace( 'has-custom-white-background-color', 'has-custom-green-background-color', $class );
+                    $separator->setAttribute( 'class', $class );
                 }
 
-                $group->setAttribute( 'class', $class );
+                // Update wp-block-group elements
+                foreach ( $xpath->query( ".//*[contains(@class, 'wp-block-group') and contains(@class, 'has-border-color') and contains(@class, 'has-custom-green-color')]", $li ) as $group ) {
+                    $class = $group->getAttribute( 'class' );
+
+                    if ( strpos( $class, 'has-custom-green-background-color' ) === false ) {
+                        $class .= ' has-custom-green-background-color';
+                    }
+                    if ( strpos( $class, 'has-custom-white-color' ) === false ) {
+                        $class .= ' has-custom-white-color';
+                    }
+
+                    $group->setAttribute( 'class', $class );
+                }
             }
         }
     }
@@ -1023,12 +1200,10 @@ add_filter( 'the_content', 'flu_core_update_progress_elements', 12 );
  * Handle AJAX request to reset visited pages cookies
  */
 function flu_core_reset_visited_pages() {
-    // Verificar nonce de seguridad
     if ( ! wp_verify_nonce( $_POST['nonce'], 'flu_core_reset_nonce' ) ) {
         wp_die( 'Error de seguridad' );
     }
 
-    // Clear all cookies
     $cookies_to_clear = array(
         'flu_visited_pages',
         'flu_captured_pages',
@@ -1053,7 +1228,6 @@ add_action( 'wp_ajax_nopriv_flu_core_reset_visited', 'flu_core_reset_visited_pag
  * Enqueue script for reset button functionality
  */
 function flu_core_enqueue_reset_script() {
-    // Only add reset button functionality on /virus/ pages
     if ( ! flu_core_is_virus_page() ) {
         return;
     }
