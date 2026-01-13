@@ -2,6 +2,7 @@
 /**
  * Geolocation functionality for Fluvial Core
  * Add coordinate fields to pages and validate user location
+ * WITH GPS PRE-WARMING AND CONTINUOUS POSITION TRACKING
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -255,9 +256,9 @@ function flu_geo_meta_box_callback( $post ) {
     echo '<tr>';
     echo '<th scope="row">Tolerancia de ubicación</th>';
     echo '<td>';
-    echo '<label for="flu_geo_tolerance_strict"><input type="radio" id="flu_geo_tolerance_strict" name="flu_geo_tolerance" value="strict" ' . checked( $tolerance, 'strict', false ) . '> Estricta (15m)</label><br>';
-    echo '<label for="flu_geo_tolerance_normal"><input type="radio" id="flu_geo_tolerance_normal" name="flu_geo_tolerance" value="normal" ' . checked( $tolerance, 'normal', false ) . '> Normal (25m)</label><br>';
-    echo '<label for="flu_geo_tolerance_amplio"><input type="radio" id="flu_geo_tolerance_amplio" name="flu_geo_tolerance" value="amplio" ' . checked( $tolerance, 'amplio', false ) . '> Amplio (50m)</label><br>';
+    echo '<label for="flu_geo_tolerance_strict"><input type="radio" id="flu_geo_tolerance_strict" name="flu_geo_tolerance" value="strict" ' . checked( $tolerance, 'strict', false ) . '> Estricta (50m)</label><br>';
+    echo '<label for="flu_geo_tolerance_normal"><input type="radio" id="flu_geo_tolerance_normal" name="flu_geo_tolerance" value="normal" ' . checked( $tolerance, 'normal', false ) . '> Normal (100m)</label><br>';
+    echo '<label for="flu_geo_tolerance_amplio"><input type="radio" id="flu_geo_tolerance_amplio" name="flu_geo_tolerance" value="amplio" ' . checked( $tolerance, 'amplio', false ) . '> Amplio (150m)</label><br>';
     echo '</td>';
     echo '</tr>';
     echo '</table>';
@@ -425,44 +426,164 @@ function flu_geo_add_validation_script() {
         return;
     }
 
-    $tolerance_meters = 25;
+    $tolerance_meters = 100;
     switch ( $tolerance ) {
         case 'strict':
-            $tolerance_meters = 15;
+            $tolerance_meters = 50;
             break;
         case 'amplio':
-            $tolerance_meters = 50;
+            $tolerance_meters = 150;
             break;
     }
 
     ?>
     <script>
-        console.log('Flu Geo: Script loading...');
+        console.log('🌍 Flu Geo: GPS Pre-warming System Active');
 
         var targetLat = <?php echo floatval( $latitude ); ?>;
         var targetLng = <?php echo floatval( $longitude ); ?>;
         var tolerance = <?php echo intval( $tolerance_meters ); ?>;
 
-        console.log('Target coordinates:', targetLat, targetLng);
-        console.log('Tolerance:', tolerance, 'meters');
+        console.log('📍 Target coordinates:', targetLat, targetLng);
+        console.log('📏 Tolerance:', tolerance, 'meters');
+
+        // GPS Pre-warming system
+        var gpsWatchId = null;
+        var bestPosition = null;
+        var bestAccuracy = Infinity;
+        var isGpsWarmedUp = false;
 
         function waitForGoogleMaps(callback) {
             if (typeof google !== 'undefined' && typeof google.maps !== 'undefined' && typeof google.maps.geometry !== 'undefined') {
-                console.log('Google Maps API loaded successfully');
+                console.log('✅ Google Maps API loaded');
                 callback();
             } else {
-                console.log('Waiting for Google Maps API...');
+                console.log('⏳ Waiting for Google Maps API...');
                 setTimeout(function() {
                     waitForGoogleMaps(callback);
                 }, 100);
             }
         }
 
-        function checkGeolocationOnly(linkElement) {
+        function detectGoogleMapsApp() {
+            var userAgent = navigator.userAgent || navigator.vendor || window.opera;
+
+            // Detectar iOS
+            var isIOS = /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream;
+
+            // Detectar Android
+            var isAndroid = /android/i.test(userAgent);
+
+            return { isIOS: isIOS, isAndroid: isAndroid };
+        }
+
+        function tryOpenGoogleMapsForPreWarming() {
+            var device = detectGoogleMapsApp();
+
+            console.log('🗺️ Intentando pre-calentar GPS con Google Maps...');
+
+            // Crear un iframe invisible que intente abrir Google Maps
+            // Esto ayuda a que el GPS se active en segundo plano
+            var mapsUrl;
+
+            if (device.isIOS) {
+                // iOS - intentar abrir Google Maps app o web
+                mapsUrl = 'comgooglemaps://?center=' + targetLat + ',' + targetLng + '&zoom=16';
+
+                // Timeout para fallback a web version
+                setTimeout(function() {
+                    console.log('📱 Fallback a Google Maps web para pre-warming');
+                }, 1000);
+
+            } else if (device.isAndroid) {
+                // Android - intentar abrir Google Maps app
+                mapsUrl = 'geo:' + targetLat + ',' + targetLng + '?q=' + targetLat + ',' + targetLng;
+            }
+
+            // Crear elemento invisible para intentar trigger
+            if (mapsUrl) {
+                var trigger = document.createElement('iframe');
+                trigger.style.display = 'none';
+                trigger.src = mapsUrl;
+                document.body.appendChild(trigger);
+
+                // Limpiar después de 2 segundos
+                setTimeout(function() {
+                    document.body.removeChild(trigger);
+                }, 2000);
+            }
+        }
+
+        function startGPSPreWarming() {
+            console.log('🔥 Iniciando pre-calentamiento GPS con watchPosition...');
+
+            var warmupStartTime = Date.now();
+            var warmupDuration = 20000; // 20 segundos de pre-calentamiento
+
+            // Intentar abrir Google Maps en segundo plano
+            tryOpenGoogleMapsForPreWarming();
+
+            if (!navigator.geolocation) {
+                console.error('❌ Geolocalización no soportada');
+                return;
+            }
+
+            gpsWatchId = navigator.geolocation.watchPosition(
+                function(position) {
+                    var elapsed = Date.now() - warmupStartTime;
+                    var accuracy = position.coords.accuracy;
+
+                    console.log('📡 GPS Reading:', {
+                        accuracy: accuracy.toFixed(2) + 'm',
+                        elapsed: (elapsed/1000).toFixed(1) + 's',
+                        lat: position.coords.latitude.toFixed(6),
+                        lng: position.coords.longitude.toFixed(6)
+                    });
+
+                    // Guardar la mejor posición (menor accuracy)
+                    if (accuracy < bestAccuracy) {
+                        bestPosition = position;
+                        bestAccuracy = accuracy;
+                        console.log('✨ Nueva mejor posición guardada:', accuracy.toFixed(2) + 'm');
+                    }
+
+                    // Si conseguimos buena precisión antes de tiempo, marcar como listo
+                    if (accuracy <= 20 && elapsed >= 5000) {
+                        console.log('🎯 Excelente precisión alcanzada:', accuracy.toFixed(2) + 'm');
+                        isGpsWarmedUp = true;
+                        stopGPSPreWarming();
+                    }
+
+                    // Después de 20 segundos, usar la mejor posición que tengamos
+                    if (elapsed >= warmupDuration) {
+                        console.log('⏰ Pre-calentamiento completado. Mejor precisión:', bestAccuracy.toFixed(2) + 'm');
+                        isGpsWarmedUp = true;
+                        stopGPSPreWarming();
+                    }
+                },
+                function(error) {
+                    console.error('❌ Error en watchPosition:', error.message);
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 30000,
+                    maximumAge: 0
+                }
+            );
+        }
+
+        function stopGPSPreWarming() {
+            if (gpsWatchId !== null) {
+                navigator.geolocation.clearWatch(gpsWatchId);
+                gpsWatchId = null;
+                console.log('🛑 GPS pre-warming detenido');
+            }
+        }
+
+        function checkGeolocationWithWarmup(linkElement) {
             if (!navigator.geolocation) {
                 console.error('❌ Geolocation not supported');
                 document.body.classList.remove('geo-checking');
-                // Navegar e ir a la sección
                 window.location.hash = 'localizacion-ko';
                 setTimeout(function() {
                     var section = document.getElementById('localizacion-ko');
@@ -471,104 +592,119 @@ function flu_geo_add_validation_script() {
                 return;
             }
 
-            console.log('🌍 Requesting geolocation...');
-            console.log('📍 Target coordinates:', targetLat, targetLng);
-            console.log('📏 Tolerance:', tolerance, 'meters');
+            console.log('🎯 Iniciando validación con GPS pre-calentado');
 
-            // Añadir delay ficticio de 2-3 segundos (random)
-            var fakeDelay = Math.random() * 1000 + 2000; // 2000-3000ms
             var startTime = Date.now();
+            var minWaitTime = 2000; // Mínimo 2 segundos de espera visual
+
+            // Si ya tenemos una buena posición del pre-calentamiento, usarla
+            if (bestPosition && bestAccuracy < 100) {
+                console.log('✅ Usando posición pre-calentada:', bestAccuracy.toFixed(2) + 'm');
+
+                var elapsed = Date.now() - startTime;
+                var remainingWait = Math.max(0, minWaitTime - elapsed);
+
+                setTimeout(function() {
+                    validatePosition(bestPosition);
+                }, remainingWait);
+
+                return;
+            }
+
+            // Si no, hacer una última lectura fresca
+            console.log('📡 Obteniendo lectura GPS final...');
 
             navigator.geolocation.getCurrentPosition(
                 function(position) {
-                    console.log('✅ User position obtained:', position.coords.latitude, position.coords.longitude);
-                    console.log('📡 Accuracy:', position.coords.accuracy, 'meters');
-                    console.log('⏱️ GPS response time:', Date.now() - startTime, 'ms');
+                    console.log('✅ Posición final obtenida:', position.coords.accuracy.toFixed(2) + 'm');
 
-                    // Calcular cuánto tiempo falta para completar el delay ficticio
+                    // Si esta posición es mejor que la pre-calentada, usarla
+                    if (!bestPosition || position.coords.accuracy < bestAccuracy) {
+                        bestPosition = position;
+                        bestAccuracy = position.coords.accuracy;
+                    }
+
                     var elapsed = Date.now() - startTime;
-                    var remainingDelay = Math.max(0, fakeDelay - elapsed);
-                    console.log('⏳ Remaining delay:', remainingDelay, 'ms');
+                    var remainingWait = Math.max(0, minWaitTime - elapsed);
 
                     setTimeout(function() {
-                        waitForGoogleMaps(function() {
-                            var userLat = position.coords.latitude;
-                            var userLng = position.coords.longitude;
-
-                            var ubicacionEspecifica = new google.maps.LatLng(targetLat, targetLng);
-                            var ubicacionActual = new google.maps.LatLng(userLat, userLng);
-                            var distance = google.maps.geometry.spherical.computeDistanceBetween(
-                                ubicacionActual,
-                                ubicacionEspecifica
-                            );
-
-                            console.log('📏 Distance calculated:', distance.toFixed(2), 'meters');
-                            console.log('🎯 Tolerance:', tolerance, 'meters');
-                            console.log('✔️ Within range?', distance <= tolerance);
-
-                            document.body.classList.remove('geo-checking');
-
-                            if (distance <= tolerance) {
-                                console.log('✅ Location validated! Going to #captura');
-                                document.body.classList.add('geo-validated');
-                                document.body.classList.remove('geo-out-of-range');
-                                // Navegar e ir a la sección
-                                window.location.hash = 'captura';
-                                setTimeout(function() {
-                                    var section = document.getElementById('captura');
-                                    if (section) section.scrollIntoView();
-                                }, 100);
-                            } else {
-                                console.log('❌ Location out of range. Distance:', distance.toFixed(2), '- Going to #localizacion-ko');
-                                document.body.classList.add('geo-out-of-range');
-                                document.body.classList.remove('geo-validated');
-                                // Navegar e ir a la sección
-                                window.location.hash = 'localizacion-ko';
-                                setTimeout(function() {
-                                    var section = document.getElementById('localizacion-ko');
-                                    if (section) section.scrollIntoView();
-                                }, 100);
-                            }
-                        });
-                    }, remainingDelay);
+                        validatePosition(bestPosition);
+                    }, remainingWait);
                 },
                 function(error) {
-                    var errorMessages = {
-                        1: 'Permiso de ubicación denegado',
-                        2: 'Posición no disponible',
-                        3: 'Tiempo de espera agotado'
-                    };
+                    console.error('❌ Error en lectura final:', error.message);
 
-                    console.error('❌ Geolocation error:', error.code, errorMessages[error.code] || error.message);
-                    console.log('⏱️ Time elapsed before error:', Date.now() - startTime, 'ms');
+                    // Si tenemos una posición del pre-calentamiento, usarla
+                    if (bestPosition) {
+                        console.log('⚠️ Usando posición pre-calentada como fallback');
+                        var elapsed = Date.now() - startTime;
+                        var remainingWait = Math.max(0, minWaitTime - elapsed);
 
-                    // Esperar el delay mínimo incluso en caso de error
-                    var elapsed = Date.now() - startTime;
-                    var remainingDelay = Math.max(0, fakeDelay - elapsed);
-
-                    setTimeout(function() {
+                        setTimeout(function() {
+                            validatePosition(bestPosition);
+                        }, remainingWait);
+                    } else {
                         document.body.classList.remove('geo-checking');
-                        // Navegar e ir a la sección
                         window.location.hash = 'localizacion-ko';
                         setTimeout(function() {
                             var section = document.getElementById('localizacion-ko');
                             if (section) section.scrollIntoView();
                         }, 100);
-                    }, remainingDelay);
+                    }
                 },
                 {
-                    enableHighAccuracy: true,  // Forzar GPS de alta precisión
-                    timeout: 15000,  // 15 segundos - suficiente para 3G/GPS
-                    maximumAge: 0  // NUNCA usar caché, siempre lectura nueva
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
                 }
             );
         }
 
-        function restoreButton(linkElement) {
-            if (linkElement) {
-                linkElement.innerHTML = linkElement.getAttribute('data-original-text') || '¡Intenta capturarlo!';
-                linkElement.style.pointerEvents = 'auto';
-            }
+        function validatePosition(position) {
+            waitForGoogleMaps(function() {
+                var userLat = position.coords.latitude;
+                var userLng = position.coords.longitude;
+                var accuracy = position.coords.accuracy;
+
+                console.log('🔍 Validando posición:', {
+                    accuracy: accuracy.toFixed(2) + 'm',
+                    userLat: userLat.toFixed(6),
+                    userLng: userLng.toFixed(6)
+                });
+
+                var ubicacionEspecifica = new google.maps.LatLng(targetLat, targetLng);
+                var ubicacionActual = new google.maps.LatLng(userLat, userLng);
+                var distance = google.maps.geometry.spherical.computeDistanceBetween(
+                    ubicacionActual,
+                    ubicacionEspecifica
+                );
+
+                console.log('📏 Distancia calculada:', distance.toFixed(2) + 'm');
+                console.log('🎯 Tolerancia:', tolerance + 'm');
+                console.log('✔️ ¿Dentro del rango?', distance <= tolerance);
+
+                document.body.classList.remove('geo-checking');
+
+                if (distance <= tolerance) {
+                    console.log('✅ ¡Ubicación validada! → #captura');
+                    document.body.classList.add('geo-validated');
+                    document.body.classList.remove('geo-out-of-range');
+                    window.location.hash = 'captura';
+                    setTimeout(function() {
+                        var section = document.getElementById('captura');
+                        if (section) section.scrollIntoView();
+                    }, 100);
+                } else {
+                    console.log('❌ Fuera de rango (' + distance.toFixed(2) + 'm) → #localizacion-ko');
+                    document.body.classList.add('geo-out-of-range');
+                    document.body.classList.remove('geo-validated');
+                    window.location.hash = 'localizacion-ko';
+                    setTimeout(function() {
+                        var section = document.getElementById('localizacion-ko');
+                        if (section) section.scrollIntoView();
+                    }, 100);
+                }
+            });
         }
 
         function handleCapturaLinks() {
@@ -579,7 +715,6 @@ function flu_geo_add_validation_script() {
                     e.preventDefault();
                     e.stopPropagation();
 
-                    // Marcar que estamos verificando ubicación
                     document.body.classList.add('geo-checking');
 
                     this.setAttribute('data-original-text', this.textContent);
@@ -588,8 +723,7 @@ function flu_geo_add_validation_script() {
                     this.innerHTML = 'Verificando ubicación...' + spinner;
                     this.style.pointerEvents = 'none';
 
-                    // SIEMPRE pedir geolocalización con maximumAge: 0 para forzar nueva lectura
-                    checkGeolocationOnly(this);
+                    checkGeolocationWithWarmup(this);
 
                 }, true);
             });
@@ -609,11 +743,9 @@ function flu_geo_add_validation_script() {
                     }
                 }
 
-                // Si volvemos a #presentacion desde cualquier lado, resetear todo
                 if (hash === '#presentacion' || hash === '') {
                     document.body.classList.remove('geo-checking', 'geo-validated', 'geo-out-of-range');
 
-                    // Resetear todos los botones que van a #captura
                     var capturaLinks = document.querySelectorAll('a[href="#captura"]');
                     capturaLinks.forEach(function(link) {
                         var originalText = link.getAttribute('data-original-text');
@@ -629,9 +761,20 @@ function flu_geo_add_validation_script() {
             window.addEventListener('hashchange', updateSections);
         }
 
+        // Iniciar pre-calentamiento al cargar la página
         document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 Página cargada - Iniciando sistema GPS');
+
+            // Iniciar pre-calentamiento GPS inmediatamente
+            startGPSPreWarming();
+
             handleCapturaLinks();
             handleLocationSections();
+
+            // Detener pre-calentamiento si el usuario navega fuera
+            window.addEventListener('beforeunload', function() {
+                stopGPSPreWarming();
+            });
         });
     </script>
     <?php
