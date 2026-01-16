@@ -34,6 +34,40 @@ function flu_3d_aframe_functionality() {
             z-index: -1;
         }
 
+        /* Loader de cámara */
+        .camera-loader {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 200;
+            background: var(--wp--preset--color--custom-white);
+            padding: 20px 16px;
+            border-radius: 16px;
+            backdrop-filter: blur(10px);
+            opacity: 1;
+            transition: opacity 0.3s ease-out;
+        }
+
+        .camera-loader.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .camera-loader-text {
+            color: var(--wp--preset--color--custom-grey);
+            font-size: 18px;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        .camera-loader-dots {
+            display: inline-block;
+            min-width: 30px;
+            text-align: left;
+        }
+
         /* Loader de virus con aguja de brújula */
         .virus-loader {
             position: absolute;
@@ -289,6 +323,38 @@ function flu_3d_aframe_functionality() {
             console.log('✅ Permiso de giroscopio guardado en cookie');
         }
 
+        // Función para crear el loader de cámara
+        function createCameraLoader() {
+            const loader = document.createElement('div');
+            loader.className = 'camera-loader';
+
+            const text = document.createElement('div');
+            text.className = 'camera-loader-text';
+
+            const textContent = document.createElement('span');
+            textContent.textContent = 'Cargando cámara';
+
+            const dots = document.createElement('span');
+            dots.className = 'camera-loader-dots';
+            dots.textContent = '';
+
+            text.appendChild(textContent);
+            text.appendChild(dots);
+            loader.appendChild(text);
+
+            // Animar los puntos
+            let dotCount = 0;
+            const dotInterval = setInterval(function() {
+                dotCount = (dotCount + 1) % 4;
+                dots.textContent = '.'.repeat(dotCount);
+            }, 400);
+
+            // Guardar el interval para poder limpiarlo después
+            loader.dotInterval = dotInterval;
+
+            return loader;
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
             const capturaDivs = document.querySelectorAll('.flu-captura');
 
@@ -503,18 +569,40 @@ function flu_3d_aframe_functionality() {
             console.log('📸 Inicializando cámara');
 
             capturaContainers.forEach(function(container) {
-                requestCameraPermission(container, function() {
-                    const flu3dImg = container.querySelector('.flu-3d img');
+                // Crear el loader de cámara primero
+                const cameraLoader = createCameraLoader();
+                container.appendChild(cameraLoader);
 
-                    if (flu3dImg && flu3dImg.src) {
-                        const imgSrc = flu3dImg.src;
-                        const fileName = imgSrc.split('/').pop().split('.')[0];
-                        const modelPath = '/wp-content/uploads/' + fileName + '.glb';
-                        createModelAFrameSceneWithLoader(container, modelPath);
-                    } else {
-                        createBasicAFrameSceneWithLoader(container);
-                    }
-                });
+                // Después de 1 segundo, cargar la cámara
+                setTimeout(function() {
+                    requestCameraPermission(container, function() {
+                        // Ocultar el loader de cámara
+                        cameraLoader.classList.add('hidden');
+
+                        // Limpiar el interval de animación de puntos
+                        if (cameraLoader.dotInterval) {
+                            clearInterval(cameraLoader.dotInterval);
+                        }
+
+                        // Remover el loader después de la transición
+                        setTimeout(function() {
+                            if (cameraLoader.parentNode) {
+                                container.removeChild(cameraLoader);
+                            }
+                        }, 300);
+
+                        const flu3dImg = container.querySelector('.flu-3d img');
+
+                        if (flu3dImg && flu3dImg.src) {
+                            const imgSrc = flu3dImg.src;
+                            const fileName = imgSrc.split('/').pop().split('.')[0];
+                            const modelPath = '/wp-content/uploads/' + fileName + '.glb';
+                            createModelAFrameSceneWithLoader(container, modelPath);
+                        } else {
+                            createBasicAFrameSceneWithLoader(container);
+                        }
+                    });
+                }, 1000); // Retraso de 1 segundo
             });
 
             cameraInitialized = true;
