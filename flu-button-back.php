@@ -41,6 +41,7 @@ function flu_back_meta_box_callback( $post ) {
     echo '<label for="flu_back_page_id">' . __('Página de destino al hacer clic en "Atrás":', 'flu-core') . '</label><br>';
     echo '<select id="flu_back_page_id" name="flu_back_page_id" style="width: 100%; margin-top: 10px;">';
     echo '<option value="">' . __('-- Comportamiento por defecto --', 'flu-core') . '</option>';
+    echo '<option value="history_back" ' . selected( $selected_page, 'history_back', false ) . '>' . __('← Página anterior (Historial)', 'flu-core') . '</option>';
 
     foreach ( $pages as $page ) {
         $selected = selected( $selected_page, $page->ID, false );
@@ -48,7 +49,7 @@ function flu_back_meta_box_callback( $post ) {
     }
 
     echo '</select>';
-    echo '<p class="description" style="margin-top: 10px;">' . __('Selecciona la página a la que debe ir el botón "Atrás" del header. Si no seleccionas ninguna, usará el comportamiento por defecto del navegador.', 'flu-core') . '</p>';
+    echo '<p class="description" style="margin-top: 10px;">' . __('Selecciona la página a la que debe ir el botón "Atrás" del header. "Página anterior (Historial)" usa window.history.back() para volver a la página previa en el navegador.', 'flu-core') . '</p>';
 }
 
 /**
@@ -71,7 +72,8 @@ function flu_back_save_meta_box_data( $post_id ) {
         return;
     }
 
-    $back_page_id = isset( $_POST['flu_back_page_id'] ) ? intval( $_POST['flu_back_page_id'] ) : '';
+    // Permitir tanto IDs numéricos como el string 'history_back'
+    $back_page_id = isset( $_POST['flu_back_page_id'] ) ? sanitize_text_field( $_POST['flu_back_page_id'] ) : '';
 
     update_post_meta( $post_id, '_flu_back_page_id', $back_page_id );
 }
@@ -92,6 +94,44 @@ function flu_back_add_functionality() {
         return; // No custom back page set, use default behavior
     }
 
+    // Si el valor es 'history_back', usar window.history.back()
+    if ( $back_page_id === 'history_back' ) {
+        ?>
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                // Buscar todos los botones/enlaces con la clase flu-back
+                var backButtons = document.querySelectorAll('.flu-back');
+
+                if (backButtons.length === 0) {
+                    console.log('No se encontraron botones con clase .flu-back');
+                    return;
+                }
+
+                console.log('Configurando botón atrás para usar historial del navegador');
+
+                backButtons.forEach(function(button) {
+                    // Si es un enlace, prevenir comportamiento por defecto y usar history.back()
+                    if (button.tagName === 'A') {
+                        button.href = '#';
+                        button.addEventListener('click', function(e) {
+                            e.preventDefault();
+                            window.history.back();
+                        });
+                    } else {
+                        // Si es un botón u otro elemento, añadir event listener
+                        button.addEventListener('click', function(e) {
+                            e.preventDefault();
+                            window.history.back();
+                        });
+                    }
+                });
+            });
+        </script>
+        <?php
+        return;
+    }
+
+    // Si es un ID de página específico, obtener el permalink
     $back_page_url = get_permalink( $back_page_id );
 
     if ( ! $back_page_url ) {
