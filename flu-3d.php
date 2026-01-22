@@ -34,40 +34,6 @@ function flu_3d_aframe_functionality() {
             z-index: -1;
         }
 
-        /* Loader de cámara */
-        .camera-loader {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            text-align: center;
-            z-index: 200;
-            background: var(--wp--preset--color--custom-white);
-            padding: 20px 16px;
-            border-radius: 16px;
-            backdrop-filter: blur(10px);
-            opacity: 1;
-            transition: opacity 0.3s ease-out;
-        }
-
-        .camera-loader.hidden {
-            opacity: 0;
-            pointer-events: none;
-        }
-
-        .camera-loader-text {
-            color: var(--wp--preset--color--custom-grey);
-            font-size: 18px;
-            font-weight: 600;
-            text-align: center;
-        }
-
-        .camera-loader-dots {
-            display: inline-block;
-            min-width: 30px;
-            text-align: left;
-        }
-
         /* Loader de virus con aguja de brújula */
         .virus-loader {
             position: absolute;
@@ -157,6 +123,16 @@ function flu_3d_aframe_functionality() {
 
         .flu-captura a-scene.loaded {
             opacity: 1;
+        }
+
+        /* Específico para #capturado */
+        #capturado.flu-captura a-scene {
+            margin-top: 0 !important;
+            position: absolute !important;
+            top: -20vh !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
         }
 
         .flu-3d img {
@@ -323,58 +299,50 @@ function flu_3d_aframe_functionality() {
             console.log('✅ Permiso de giroscopio guardado en cookie');
         }
 
-        // Función para crear el loader de cámara
-        function createCameraLoader() {
-            const loader = document.createElement('div');
-            loader.className = 'camera-loader';
-
-            const text = document.createElement('div');
-            text.className = 'camera-loader-text';
-
-            const textContent = document.createElement('span');
-            textContent.textContent = 'Cargando cámara';
-
-            const dots = document.createElement('span');
-            dots.className = 'camera-loader-dots';
-            dots.textContent = '';
-
-            text.appendChild(textContent);
-            text.appendChild(dots);
-            loader.appendChild(text);
-
-            // Animar los puntos
-            let dotCount = 0;
-            const dotInterval = setInterval(function() {
-                dotCount = (dotCount + 1) % 4;
-                dots.textContent = '.'.repeat(dotCount);
-            }, 400);
-
-            // Guardar el interval para poder limpiarlo después
-            loader.dotInterval = dotInterval;
-
-            return loader;
-        }
-
         document.addEventListener('DOMContentLoaded', function() {
             const capturaDivs = document.querySelectorAll('.flu-captura');
+            console.log('🔍 Total .flu-captura encontrados:', capturaDivs.length);
 
-            capturaDivs.forEach(function(div) {
+            capturaDivs.forEach(function(div, index) {
                 capturaContainers.push(div);
 
                 const isInCapturado = div.closest('#capturado') !== null;
                 const isInCaptura = div.closest('#captura') !== null;
 
+                console.log('📦 .flu-captura[' + index + ']:', {
+                    isInCapturado: isInCapturado,
+                    isInCaptura: isInCaptura,
+                    parentId: div.parentElement ? div.parentElement.id : 'no-parent-id',
+                    classes: div.className
+                });
+
                 if (isInCapturado) {
                     console.log('📍 Encontrado .flu-captura en #capturado');
                     const flu3dImg = div.querySelector('.flu-3d img');
-                    if (flu3dImg && flu3dImg.src) {
-                        const imgSrc = flu3dImg.src;
-                        const fileName = imgSrc.split('/').pop().split('.')[0];
-                        const modelPath = '/wp-content/uploads/' + fileName + '.glb';
-                        flu3dImg.style.display = 'none';
-                        createModelAFrameSceneForCapturado(div, modelPath);
+
+                    if (flu3dImg) {
+                        console.log('✅ Imagen .flu-3d encontrada en #capturado');
+                        console.log('   - src:', flu3dImg.src);
+
+                        if (flu3dImg.src) {
+                            const imgSrc = flu3dImg.src;
+                            const fileName = imgSrc.split('/').pop().split('.')[0];
+                            const modelPath = '/wp-content/uploads/' + fileName + '.glb';
+
+                            console.log('🎯 Ruta del modelo GLB:', modelPath);
+                            flu3dImg.style.display = 'none';
+
+                            console.log('🚀 Llamando a createModelAFrameSceneForCapturado...');
+                            createModelAFrameSceneForCapturado(div, modelPath);
+                        } else {
+                            console.error('❌ La imagen no tiene src');
+                        }
+                    } else {
+                        console.error('❌ No se encontró .flu-3d img en #capturado');
+                        console.log('   - HTML del contenedor:', div.innerHTML.substring(0, 200));
                     }
                 } else if (!isInCaptura) {
+                    console.log('📍 .flu-captura fuera de #captura y #capturado');
                     const flu3dImg = div.querySelector('.flu-3d img');
                     if (flu3dImg && flu3dImg.src) {
                         const imgSrc = flu3dImg.src;
@@ -390,12 +358,42 @@ function flu_3d_aframe_functionality() {
             handleCapturaHash();
 
             window.addEventListener('hashchange', function() {
+                console.log('🔄 Hash changed to:', window.location.hash);
                 handleCapturaHash();
 
                 if (window.location.hash === '#atrapado') {
                     showAtrapado();
                 } else {
                     hideAtrapado();
+                }
+
+                // Si cambiamos a #capturado, verificar modelos 3D
+                if (window.location.hash === '#capturado') {
+                    console.log('🎯 Navegando a #capturado, verificando modelos 3D...');
+                    setTimeout(function() {
+                        const capturadoDiv = document.getElementById('capturado');
+                        if (capturadoDiv) {
+                            const flu3dInCapturado = capturadoDiv.querySelectorAll('.flu-captura');
+                            console.log('   - .flu-captura en #capturado:', flu3dInCapturado.length);
+
+                            flu3dInCapturado.forEach(function(div, idx) {
+                                console.log('   - Verificando .flu-captura[' + idx + '] en #capturado');
+                                const existingScene = div.querySelector('a-scene');
+                                if (existingScene) {
+                                    console.log('   ✅ Ya tiene a-scene');
+                                } else {
+                                    console.log('   ❌ NO tiene a-scene, intentando crear...');
+                                    const flu3dImg = div.querySelector('.flu-3d img');
+                                    if (flu3dImg && flu3dImg.src) {
+                                        const imgSrc = flu3dImg.src;
+                                        const fileName = imgSrc.split('/').pop().split('.')[0];
+                                        const modelPath = '/wp-content/uploads/' + fileName + '.glb';
+                                        createModelAFrameSceneForCapturado(div, modelPath);
+                                    }
+                                }
+                            });
+                        }
+                    }, 100);
                 }
             });
 
@@ -410,6 +408,11 @@ function flu_3d_aframe_functionality() {
 
             if (window.location.hash === '#atrapado') {
                 showAtrapado();
+            }
+
+            // Log inicial si ya estamos en #capturado
+            if (window.location.hash === '#capturado') {
+                console.log('🎯 Página cargada ya en #capturado');
             }
         });
 
@@ -569,40 +572,18 @@ function flu_3d_aframe_functionality() {
             console.log('📸 Inicializando cámara');
 
             capturaContainers.forEach(function(container) {
-                // Crear el loader de cámara primero
-                const cameraLoader = createCameraLoader();
-                container.appendChild(cameraLoader);
+                requestCameraPermission(container, function() {
+                    const flu3dImg = container.querySelector('.flu-3d img');
 
-                // Después de 1 segundo, cargar la cámara
-                setTimeout(function() {
-                    requestCameraPermission(container, function() {
-                        // Ocultar el loader de cámara
-                        cameraLoader.classList.add('hidden');
-
-                        // Limpiar el interval de animación de puntos
-                        if (cameraLoader.dotInterval) {
-                            clearInterval(cameraLoader.dotInterval);
-                        }
-
-                        // Remover el loader después de la transición
-                        setTimeout(function() {
-                            if (cameraLoader.parentNode) {
-                                container.removeChild(cameraLoader);
-                            }
-                        }, 300);
-
-                        const flu3dImg = container.querySelector('.flu-3d img');
-
-                        if (flu3dImg && flu3dImg.src) {
-                            const imgSrc = flu3dImg.src;
-                            const fileName = imgSrc.split('/').pop().split('.')[0];
-                            const modelPath = '/wp-content/uploads/' + fileName + '.glb';
-                            createModelAFrameSceneWithLoader(container, modelPath);
-                        } else {
-                            createBasicAFrameSceneWithLoader(container);
-                        }
-                    });
-                }, 1000); // Retraso de 1 segundo
+                    if (flu3dImg && flu3dImg.src) {
+                        const imgSrc = flu3dImg.src;
+                        const fileName = imgSrc.split('/').pop().split('.')[0];
+                        const modelPath = '/wp-content/uploads/' + fileName + '.glb';
+                        createModelAFrameSceneWithLoader(container, modelPath);
+                    } else {
+                        createBasicAFrameSceneWithLoader(container);
+                    }
+                });
             });
 
             cameraInitialized = true;
@@ -912,6 +893,17 @@ function flu_3d_aframe_functionality() {
         }
 
         function createModelAFrameSceneForCapturado(container, modelPath) {
+            console.log('🎬 createModelAFrameSceneForCapturado INICIADO');
+            console.log('   - Container:', container);
+            console.log('   - Model path:', modelPath);
+
+            // Verificar si ya existe un a-scene
+            const existingScene = container.querySelector('a-scene');
+            if (existingScene) {
+                console.log('⚠️ Ya existe un a-scene en este contenedor, abortando');
+                return;
+            }
+
             const scene = document.createElement('a-scene');
             scene.setAttribute('vr-mode-ui', 'enabled: false');
             scene.setAttribute('device-orientation-permission-ui', 'enabled: false');
@@ -919,26 +911,46 @@ function flu_3d_aframe_functionality() {
             scene.setAttribute('renderer', 'alpha: true; antialias: true');
             scene.setAttribute('embedded', '');
 
+            console.log('✅ a-scene creado');
+
             const camera = document.createElement('a-camera');
             camera.setAttribute('look-controls', 'enabled: false');
             camera.setAttribute('wasd-controls', 'enabled: false');
             camera.setAttribute('device-orientation-controls', 'enabled: false');
             camera.setAttribute('position', '0 1.6 0');
 
+            console.log('✅ a-camera creado');
+
             const model = document.createElement('a-gltf-model');
             model.setAttribute('src', modelPath);
-            model.setAttribute('position', '0 2.5 -3');
-            model.setAttribute('scale', '2 2 2');
-            model.setAttribute('rotation', '0 0 0');
+            model.setAttribute('position', '0 1.6 -2.2');
+            // X(izq/der) Y(altura) Z(profundidad: - es más cerca)
+            model.setAttribute('scale', '1.3 1.3 1.3');
+            // X Y Z (Y más grande = estirado vertical)
+            model.setAttribute('rotation', '-10 0 0');     // X(inclinación) Y(giro) Z(roll)
+
+            console.log('✅ a-gltf-model creado con parámetros ajustados');
+            console.log('   💡 Para modificar manualmente:');
+            console.log('   - position: X(izq-/der+) Y(arriba+/abajo-) Z(cerca-/lejos+)');
+            console.log('   - scale: valores más bajos = más pequeño');
+            console.log('   - rotation: X(inclinar adelante-/atrás+) Y(girar) Z(roll)');
 
             scene.appendChild(model);
             scene.appendChild(camera);
 
+            console.log('✅ Elementos añadidos a la escena');
+
             container.appendChild(scene);
+
+            console.log('✅ Escena añadida al contenedor');
 
             scene.classList.add('loaded');
 
+            console.log('✅ Clase "loaded" añadida');
+
             if (!gyroscopeInitialized) {
+                console.log('🔄 Giroscopio no inicializado, verificando permisos...');
+
                 if (typeof DeviceOrientationEvent !== 'undefined' &&
                     typeof DeviceOrientationEvent.requestPermission === 'function') {
 
@@ -972,7 +984,11 @@ function flu_3d_aframe_functionality() {
                     console.log('📱 Android - Activando giroscopio directamente en #capturado');
                     enableGyroscope();
                 }
+            } else {
+                console.log('✅ Giroscopio ya estaba inicializado');
             }
+
+            console.log('🎬 createModelAFrameSceneForCapturado FINALIZADO');
         }
 
         function createVirusLoader() {
