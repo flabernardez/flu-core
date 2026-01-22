@@ -168,6 +168,7 @@ function flu_core_add_visited_css() {
         }
         .progreso .captured .capturado {
             display: block;
+            cursor: pointer;
         }
         
         /* Zone completion badges - hidden by default */
@@ -190,108 +191,17 @@ function flu_core_add_visited_css() {
         /* Virus bloqueados - progreso secuencial - only for virus pages */
         .progreso li.locked {
             opacity: 0.4;
-            pointer-events: auto;
-            cursor: pointer;
+            pointer-events: none;
         }
         
         .progreso li.locked a {
-            cursor: pointer;
-            pointer-events: auto;
+            cursor: not-allowed;
+            pointer-events: none;
         }
         
         .progreso li.unlocked {
             opacity: 1;
             pointer-events: auto;
-        }
-        
-        /* Modal de virus no activo */
-        .virus-locked-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            background: rgba(0, 0, 0, 0.85);
-            backdrop-filter: blur(8px);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 10000;
-            padding: 0;
-            opacity: 0;
-            visibility: hidden;
-            transition: opacity 0.3s ease, visibility 0.3s ease;
-        }
-
-        .virus-locked-overlay.show {
-            opacity: 1;
-            visibility: visible;
-        }
-
-        .virus-locked-modal {
-            background: var(--wp--preset--color--base, #fff);
-            border-radius: 16px;
-            padding: 40px 32px;
-            max-width: 360px;
-            width: 90%;
-            text-align: center;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            transform: scale(0.9);
-            transition: transform 0.3s ease;
-        }
-
-        .virus-locked-overlay.show .virus-locked-modal {
-            transform: scale(1);
-        }
-
-        .virus-locked-icon {
-            font-size: 64px;
-            margin-bottom: 20px;
-        }
-
-        .virus-locked-title {
-            color: var(--wp--preset--color--contrast, #000);
-            font-size: 24px;
-            font-weight: 700;
-            margin-bottom: 12px;
-        }
-
-        .virus-locked-text {
-            color: var(--wp--preset--color--contrast, #000);
-            font-size: 16px;
-            line-height: 1.5;
-            margin-bottom: 24px;
-            font-weight: 400;
-        }
-
-        .virus-locked-button {
-            background: var(--wp--preset--color--accent, #00ff88);
-            color: var(--wp--preset--color--base, #000);
-            border: none;
-            padding: 16px 32px;
-            border-radius: 12px;
-            font-size: 16px;
-            font-weight: 700;
-            cursor: pointer;
-            touch-action: manipulation;
-            width: 100%;
-            transition: transform 0.1s ease;
-        }
-
-        .virus-locked-button:active {
-            transform: scale(0.98);
-        }
-        
-        /* Carga progresiva de cajas en listado de virus */
-        .progreso li .caja {
-            opacity: 0;
-            transform: translateY(20px);
-            transition: opacity 0.6s ease-out, transform 0.6s ease-out;
-        }
-        
-        .progreso li .caja.loaded {
-            opacity: 1;
-            transform: translateY(0);
         }
         
         /* Modal de río completado */
@@ -709,66 +619,6 @@ function flu_core_add_visited_functionality() {
             });
         }
 
-        function showVirusLockedModal() {
-            // Detectar idioma desde la URL
-            const currentPath = window.location.pathname;
-            const isEuskera = currentPath.includes('/eu/');
-
-            const overlay = document.createElement('div');
-            overlay.className = 'virus-locked-overlay';
-
-            const modal = document.createElement('div');
-            modal.className = 'virus-locked-modal';
-
-            const icon = document.createElement('div');
-            icon.className = 'virus-locked-icon';
-            icon.textContent = '🔒';
-
-            const title = document.createElement('div');
-            title.className = 'virus-locked-title';
-            title.textContent = isEuskera ? 'Birusa ez dago aktibo' : 'Virus no activo';
-
-            const text = document.createElement('div');
-            text.className = 'virus-locked-text';
-            text.textContent = isEuskera
-                ? 'Aurretik aurreko birusak harrapatu behar dituzu hau desblokeatzeko'
-                : 'Debes capturar los virus anteriores para desbloquear este';
-
-            const button = document.createElement('button');
-            button.className = 'virus-locked-button';
-            button.textContent = isEuskera ? 'Ados' : 'Entendido';
-
-            modal.appendChild(icon);
-            modal.appendChild(title);
-            modal.appendChild(text);
-            modal.appendChild(button);
-            overlay.appendChild(modal);
-            document.body.appendChild(overlay);
-
-            // Mostrar modal con animación
-            setTimeout(function() {
-                overlay.classList.add('show');
-            }, 10);
-
-            // Cerrar al hacer clic en el botón
-            button.addEventListener('click', function() {
-                overlay.classList.remove('show');
-                setTimeout(function() {
-                    document.body.removeChild(overlay);
-                }, 300);
-            });
-
-            // Cerrar al hacer clic fuera del modal
-            overlay.addEventListener('click', function(e) {
-                if (e.target === overlay) {
-                    overlay.classList.remove('show');
-                    setTimeout(function() {
-                        document.body.removeChild(overlay);
-                    }, 300);
-                }
-            });
-        }
-
         function applySequentialUnlock() {
             // Solo aplicar bloqueo secuencial en páginas de virus
             const currentPath = window.location.pathname;
@@ -825,7 +675,7 @@ function flu_core_add_visited_functionality() {
             });
         }
 
-        function updateCapturedLinks() {
+        function makeCapturadoClickable() {
             const capturedPages = getCapturedPages();
             const progressoLoops = document.querySelectorAll('.wp-block-query.progreso');
 
@@ -836,21 +686,30 @@ function flu_core_add_visited_functionality() {
                     const pageId = getCanonicalPageId(li);
 
                     if (pageId && capturedPages.includes(pageId)) {
-                        const links = li.querySelectorAll('a[href]');
+                        // Buscar el contenedor .capturado
+                        const capturadoDiv = li.querySelector('.wp-block-group.capturado');
 
-                        links.forEach(function(link) {
-                            const href = link.getAttribute('href');
+                        if (capturadoDiv) {
+                            // Obtener la URL de la página
+                            const linkElement = li.querySelector('a[href]');
+                            if (linkElement) {
+                                const baseUrl = linkElement.getAttribute('href').split('#')[0];
+                                const targetUrl = baseUrl + '#capturado';
 
-                            if (href && !href.startsWith('#') && !href.startsWith('mailto:') && !href.startsWith('tel:')) {
-                                const cleanHref = href.split('#')[0];
-                                const newHref = cleanHref + '#capturado';
+                                // Hacer el div clickeable
+                                capturadoDiv.style.cursor = 'pointer';
 
-                                if (href !== newHref) {
-                                    link.setAttribute('href', newHref);
-                                    console.log('Link actualizado para virus capturado:', pageId, '->', newHref);
-                                }
+                                // Añadir event listener
+                                capturadoDiv.addEventListener('click', function(e) {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    window.location.href = targetUrl;
+                                    console.log('🎯 Navegando a virus capturado:', targetUrl);
+                                });
+
+                                console.log('✅ Div .capturado clickeable configurado para ID:', pageId);
                             }
-                        });
+                        }
                     }
                 });
             });
@@ -872,8 +731,7 @@ function flu_core_add_visited_functionality() {
                             if (isVirusPage && listItem.classList.contains('locked')) {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                console.log('🔒 Virus bloqueado - mostrando modal');
-                                showVirusLockedModal();
+                                console.log('🔒 Virus bloqueado - debes capturar los anteriores primero');
                                 return false;
                             }
 
@@ -910,7 +768,7 @@ function flu_core_add_visited_functionality() {
                             setTimeout(function() {
                                 markVisitedElements();
                                 applySequentialUnlock();
-                                updateCapturedLinks();
+                                makeCapturadoClickable();
                                 checkZoneCompletion();
 
                                 // Verificar si se completó algún río después de capturar
@@ -940,7 +798,7 @@ function flu_core_add_visited_functionality() {
                                 setTimeout(function() {
                                     markVisitedElements();
                                     applySequentialUnlock();
-                                    updateCapturedLinks();
+                                    makeCapturadoClickable();
                                     checkZoneCompletion();
 
                                     // Verificar si se completó algún río después de capturar
@@ -1075,39 +933,6 @@ function flu_core_add_visited_functionality() {
             const expires = new Date();
             expires.setTime(expires.getTime() + (days * 24 * 60 * 60 * 1000));
             document.cookie = name + "=" + value + ";expires=" + expires.toUTCString() + ";path=/";
-        }
-
-        function progressiveImageLoad() {
-            const currentPath = window.location.pathname;
-            const isVirusPage = currentPath.includes('/virus/') || currentPath.includes('/birusa-goian/');
-
-            if (!isVirusPage) {
-                return;
-            }
-
-            console.log('📦 Iniciando carga progresiva de cajas');
-
-            const progressoLoops = document.querySelectorAll('.wp-block-query.progreso');
-
-            progressoLoops.forEach(function(loop) {
-                const listItems = Array.from(loop.querySelectorAll('li[class*="post-"]'));
-
-                listItems.forEach(function(li, index) {
-                    const cajas = li.querySelectorAll('.caja');
-
-                    cajas.forEach(function(caja) {
-                        // Calcular delay basado en el índice (150ms entre cada caja)
-                        const delay = index * 150;
-
-                        // Aplicar el efecto con delay
-                        setTimeout(function() {
-                            caja.classList.add('loaded');
-                        }, delay);
-                    });
-                });
-
-                console.log('✅ Configurada carga progresiva para', listItems.length, 'cajas');
-            });
         }
 
         function showRiverCompleteModal(riverName, bothComplete) {
@@ -1279,15 +1104,14 @@ function flu_core_add_visited_functionality() {
 
             markVisitedElements();
             trackLinkClicks();
-            progressiveImageLoad(); // ← NUEVA FUNCIÓN para carga progresiva de imágenes
 
             if (isVirusPage) {
                 applySequentialUnlock();
-                updateCapturedLinks();
+                makeCapturadoClickable(); // ← NUEVA FUNCIÓN
                 trackCaptureWhenAtrapado();
                 checkZoneCompletion();
                 checkAndShowRiverModals();
-                checkZoneOnReturn(); // ← NUEVA FUNCIÓN para verificar al volver
+                checkZoneOnReturn();
 
                 setTimeout(function() {
                     const argaCompleto = getCookie('arga_completado');
