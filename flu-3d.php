@@ -213,7 +213,6 @@ function flu_3d_aframe_functionality() {
             position: fixed;
             top: 0;
             left: 0;
-            width: 100vw;
             height: 100vh;
             background: rgba(0, 0, 0, 0.85);
             backdrop-filter: blur(8px);
@@ -221,7 +220,7 @@ function flu_3d_aframe_functionality() {
             align-items: center;
             justify-content: center;
             z-index: 10000;
-            padding: 0;
+            padding: var(--wp--preset--spacing--50);
         }
 
         .gyro-activate-overlay.hidden {
@@ -229,34 +228,41 @@ function flu_3d_aframe_functionality() {
         }
 
         .gyro-activate-modal {
-            background: var(--wp--preset--color--base, #fff);
-            border-radius: 16px;
-            padding: 32px 24px;
-            max-width: 320px;
-            width: 100%;
+            background-color: var(--wp--preset--color--custom-white);
+            border-radius: 32px;
+            padding-top: var(--wp--preset--spacing--50);
+            padding-right: var(--wp--preset--spacing--50);
+            padding-bottom: var(--wp--preset--spacing--50);
+            padding-left: var(--wp--preset--spacing--50);
+            max-width: 400px;
             text-align: center;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
         }
 
         .gyro-activate-text {
-            color: var(--wp--preset--color--contrast, #000);
-            font-size: 16px;
-            line-height: 1.5;
+            font-family: var(--wp--preset--font-family--inter);
+            font-size: var(--wp--preset--font-size--medium);
+            line-height: 1.3;
+            color: var(--wp--preset--color--custom-green-dark);
             margin-bottom: 24px;
-            font-weight: 500;
         }
 
         .gyro-activate-button {
-            background: var(--wp--preset--color--accent, #00ff88);
+            font-family: var(--wp--preset--font-family--inter);
+            font-size: var(--wp--preset--font-size--medium);
+            line-height: 1.3;
+            background-color: var(--wp--preset--color--custom-yellow);
             color: var(--wp--preset--color--base, #000);
             border: none;
-            padding: 16px 32px;
-            border-radius: 12px;
-            font-size: 16px;
-            font-weight: 700;
+            padding-top: var(--wp--preset--spacing--30);
+            padding-right: var(--wp--preset--spacing--40);
+            padding-bottom: var(--wp--preset--spacing--30);
+            padding-left: var(--wp--preset--spacing--40);
+            border-radius: 9999px;
             cursor: pointer;
             touch-action: manipulation;
-            width: 100%;
+            width: auto;
+            display: inline-block;
             transition: transform 0.1s ease;
         }
 
@@ -868,7 +874,7 @@ function flu_3d_aframe_functionality() {
 
             const model = document.createElement('a-gltf-model');
             model.setAttribute('src', modelPath);
-            model.setAttribute('position', '0 1.5 -3');
+            model.setAttribute('position', '0 1.3 -3');
             model.setAttribute('scale', '2 2 2');
             model.setAttribute('rotation', '0 0 0');
 
@@ -923,8 +929,7 @@ function flu_3d_aframe_functionality() {
 
             const model = document.createElement('a-gltf-model');
             model.setAttribute('src', modelPath);
-            model.setAttribute('position', '0 1.6 -2.2');
-            // X(izq/der) Y(altura) Z(profundidad: - es más cerca)
+            model.setAttribute('position', '0 1.6 -2.2');  // X(izq/der) Y(altura) Z(profundidad: - es más cerca)
             model.setAttribute('scale', '1.3 1.3 1.3');
             // X Y Z (Y más grande = estirado vertical)
             model.setAttribute('rotation', '-10 0 0');     // X(inclinación) Y(giro) Z(roll)

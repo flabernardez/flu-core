@@ -190,18 +190,117 @@ function flu_core_add_visited_css() {
         
         /* Virus bloqueados - progreso secuencial - only for virus pages */
         .progreso li.locked {
-            opacity: 0.4;
-            pointer-events: none;
+            opacity: 0.5;
+            pointer-events: auto; /* Permitir click para mostrar aviso */
         }
         
         .progreso li.locked a {
-            cursor: not-allowed;
-            pointer-events: none;
+            cursor: pointer; /* Permitir click para mostrar aviso */
+            pointer-events: auto;
+        }
+        
+        .progreso li.locked .sin-capturar,
+        .progreso li.locked .bloqueada {
+            filter: blur(3px);
+            transition: filter 0.3s ease;
         }
         
         .progreso li.unlocked {
             opacity: 1;
             pointer-events: auto;
+        }
+        
+        .progreso li.unlocked .sin-capturar,
+        .progreso li.unlocked .bloqueada {
+            filter: blur(0);
+        }
+        
+        /* Modal de virus bloqueado */
+        .virus-locked-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(8px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            padding: var(--wp--preset--spacing--50);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .virus-locked-overlay.show {
+            display: flex;
+            opacity: 1;
+        }
+
+        .virus-locked-modal {
+            background-color: var(--wp--preset--color--custom-white);
+            border-radius: 32px;
+            padding-top: var(--wp--preset--spacing--50);
+            padding-right: var(--wp--preset--spacing--50);
+            padding-bottom: var(--wp--preset--spacing--50);
+            padding-left: var(--wp--preset--spacing--50);
+            max-width: 400px;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            transform: scale(0.9);
+            transition: transform 0.3s ease;
+        }
+
+        .virus-locked-overlay.show .virus-locked-modal {
+            transform: scale(1);
+        }
+
+        .virus-locked-emoji {
+            font-size: 64px;
+            margin-bottom: 20px;
+        }
+
+        .virus-locked-title {
+            font-family: var(--wp--preset--font-family--nunito) !important;
+            font-size: var(--wp--preset--font-size--large);
+            font-style: normal;
+            font-weight: 900;
+            letter-spacing: 0;
+            line-height: 1;
+            text-transform: uppercase;
+            color: var(--wp--preset--color--custom-green-dark);
+            margin-bottom: 12px;
+        }
+
+        .virus-locked-text {
+            font-family: var(--wp--preset--font-family--inter);
+            font-size: var(--wp--preset--font-size--medium);
+            line-height: 1.3;
+            color: var(--wp--preset--color--custom-green-dark);
+            margin-bottom: 24px;
+        }
+
+        .virus-locked-button {
+            font-family: var(--wp--preset--font-family--inter);
+            font-size: var(--wp--preset--font-size--medium);
+            line-height: 1.3;
+            background-color: var(--wp--preset--color--custom-yellow);
+            color: var(--wp--preset--color--base, #000);
+            border: none;
+            padding-top: var(--wp--preset--spacing--30);
+            padding-right: var(--wp--preset--spacing--40);
+            padding-bottom: var(--wp--preset--spacing--30);
+            padding-left: var(--wp--preset--spacing--40);
+            border-radius: 9999px;
+            cursor: pointer;
+            touch-action: manipulation;
+            width: auto;
+            display: inline-block;
+            transition: transform 0.1s ease;
+        }
+
+        .virus-locked-button:active {
+            transform: scale(0.98);
         }
         
         /* Modal de río completado */
@@ -217,7 +316,7 @@ function flu_core_add_visited_css() {
             align-items: center;
             justify-content: center;
             z-index: 10000;
-            padding: 0;
+            padding: var(--wp--preset--spacing--50);
             opacity: 0;
             visibility: hidden;
             transition: opacity 0.3s ease, visibility 0.3s ease;
@@ -229,11 +328,13 @@ function flu_core_add_visited_css() {
         }
 
         .river-complete-modal {
-            background: var(--wp--preset--color--base, #fff);
-            border-radius: 16px;
-            padding: 40px 32px;
+            background-color: var(--wp--preset--color--custom-white);
+            border-radius: 32px;
+            padding-top: var(--wp--preset--spacing--50);
+            padding-right: var(--wp--preset--spacing--50);
+            padding-bottom: var(--wp--preset--spacing--50);
+            padding-left: var(--wp--preset--spacing--50);
             max-width: 400px;
-            width: 90%;
             text-align: center;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
             transform: scale(0.9);
@@ -256,31 +357,41 @@ function flu_core_add_visited_css() {
         }
 
         .river-complete-title {
-            color: var(--wp--preset--color--contrast, #000);
-            font-size: 24px;
-            font-weight: 700;
+            font-family: var(--wp--preset--font-family--nunito) !important;
+            font-size: var(--wp--preset--font-size--large);
+            font-style: normal;
+            font-weight: 900;
+            letter-spacing: 0;
+            line-height: 1;
+            text-transform: uppercase;
+            color: var(--wp--preset--color--custom-green-dark);
             margin-bottom: 12px;
         }
 
         .river-complete-text {
-            color: var(--wp--preset--color--contrast, #000);
-            font-size: 16px;
-            line-height: 1.5;
+            font-family: var(--wp--preset--font-family--inter);
+            font-size: var(--wp--preset--font-size--medium);
+            line-height: 1.3;
+            color: var(--wp--preset--color--custom-green-dark);
             margin-bottom: 24px;
-            font-weight: 400;
         }
 
         .river-complete-button {
-            background: var(--wp--preset--color--accent, #00ff88);
+            font-family: var(--wp--preset--font-family--inter);
+            font-size: var(--wp--preset--font-size--medium);
+            line-height: 1.3;
+            background-color: var(--wp--preset--color--custom-yellow);
             color: var(--wp--preset--color--base, #000);
             border: none;
-            padding: 16px 32px;
-            border-radius: 12px;
-            font-size: 16px;
-            font-weight: 700;
+            padding-top: var(--wp--preset--spacing--30);
+            padding-right: var(--wp--preset--spacing--40);
+            padding-bottom: var(--wp--preset--spacing--30);
+            padding-left: var(--wp--preset--spacing--40);
+            border-radius: 9999px;
             cursor: pointer;
             touch-action: manipulation;
-            width: 100%;
+            width: auto;
+            display: inline-block;
             transition: transform 0.1s ease;
         }
 
@@ -664,10 +775,24 @@ function flu_core_add_visited_functionality() {
                         if (isCaptured || index === nextUnlocked) {
                             li.classList.remove('locked');
                             li.classList.add('unlocked');
+
+                            // Remover clase bloqueada del contenedor
+                            const sinCapturar = li.querySelector('.sin-capturar');
+                            if (sinCapturar) {
+                                sinCapturar.classList.remove('bloqueada');
+                            }
+
                             console.log('🔓 Desbloqueado:', pageId, '(índice', index + ')');
                         } else {
                             li.classList.add('locked');
                             li.classList.remove('unlocked');
+
+                            // Añadir clase bloqueada al contenedor .sin-capturar
+                            const sinCapturar = li.querySelector('.sin-capturar');
+                            if (sinCapturar) {
+                                sinCapturar.classList.add('bloqueada');
+                            }
+
                             console.log('🔒 Bloqueado:', pageId, '(índice', index + ')');
                         }
                     }
@@ -715,6 +840,63 @@ function flu_core_add_visited_functionality() {
             });
         }
 
+        function showVirusLockedModal() {
+            // Detectar idioma desde la URL
+            const currentPath = window.location.pathname;
+            const isEuskera = currentPath.includes('/eu/');
+
+            const overlay = document.createElement('div');
+            overlay.className = 'virus-locked-overlay';
+
+            const modal = document.createElement('div');
+            modal.className = 'virus-locked-modal';
+
+            const emoji = document.createElement('div');
+            emoji.className = 'virus-locked-emoji';
+            emoji.textContent = '🔒';
+
+            const title = document.createElement('div');
+            title.className = 'virus-locked-title';
+            title.textContent = isEuskera ? 'Birusak blokeatuta' : 'Virus bloqueado';
+
+            const text = document.createElement('div');
+            text.className = 'virus-locked-text';
+            text.textContent = isEuskera
+                ? 'Aurretik dauden birusak harrapatu behar dituzu lehenengo'
+                : 'Debes capturar los virus anteriores primero';
+
+            const button = document.createElement('button');
+            button.className = 'virus-locked-button';
+            button.textContent = isEuskera ? 'Itxi' : 'Cerrar';
+
+            modal.appendChild(emoji);
+            modal.appendChild(title);
+            modal.appendChild(text);
+            modal.appendChild(button);
+            overlay.appendChild(modal);
+            document.body.appendChild(overlay);
+
+            setTimeout(function() {
+                overlay.classList.add('show');
+            }, 10);
+
+            button.addEventListener('click', function() {
+                overlay.classList.remove('show');
+                setTimeout(function() {
+                    document.body.removeChild(overlay);
+                }, 300);
+            });
+
+            overlay.addEventListener('click', function(e) {
+                if (e.target === overlay) {
+                    overlay.classList.remove('show');
+                    setTimeout(function() {
+                        document.body.removeChild(overlay);
+                    }, 300);
+                }
+            });
+        }
+
         function trackLinkClicks() {
             const currentPath = window.location.pathname;
             const isVirusPage = currentPath.includes('/virus/') || currentPath.includes('/birusa-goian/');
@@ -731,7 +913,8 @@ function flu_core_add_visited_functionality() {
                             if (isVirusPage && listItem.classList.contains('locked')) {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                console.log('🔒 Virus bloqueado - debes capturar los anteriores primero');
+                                console.log('🔒 Virus bloqueado - mostrando aviso');
+                                showVirusLockedModal();
                                 return false;
                             }
 
@@ -1125,6 +1308,11 @@ function flu_core_add_visited_functionality() {
                     }
                 }, 500);
             }
+
+            // Emitir evento para indicar que el progreso está listo
+            console.log('✅ Flu Progress: Sistema de progreso configurado');
+            const progressReadyEvent = new Event('fluProgressReady');
+            document.dispatchEvent(progressReadyEvent);
         });
     </script>
     <?php

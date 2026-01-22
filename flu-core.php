@@ -176,3 +176,6 @@ require_once plugin_dir_path( __FILE__ ) . 'flu-analytics.php';
 
 // Include back button functionality
 require_once plugin_dir_path( __FILE__ ) . 'flu-button-back.php';
+
+// Include animations
+require_once plugin_dir_path( __FILE__ ) . 'flu-animations.php';
