@@ -275,6 +275,82 @@ function flu_3d_aframe_functionality() {
         var gyroscopeInitialized = false;
         var capturaContainers = [];
 
+        // Sistema de precarga de modelos GLB
+        var glbCache = {};
+        var glbPreloadQueue = [];
+        var isPreloading = false;
+
+        function preloadGLBModels() {
+            console.log('📦 Iniciando precarga de modelos GLB...');
+
+            // Encontrar todas las imágenes .flu-3d que indican un modelo GLB
+            const allFlu3dImages = document.querySelectorAll('.flu-3d img');
+
+            allFlu3dImages.forEach(function(img) {
+                if (img.src) {
+                    const imgSrc = img.src;
+                    const fileName = imgSrc.split('/').pop().split('.')[0];
+                    const modelPath = '/wp-content/uploads/' + fileName + '.glb';
+
+                    // Añadir a la cola si no está ya en caché
+                    if (!glbCache[modelPath] && !glbPreloadQueue.includes(modelPath)) {
+                        glbPreloadQueue.push(modelPath);
+                    }
+                }
+            });
+
+            console.log('📋 Modelos GLB encontrados para precargar:', glbPreloadQueue.length);
+
+            if (glbPreloadQueue.length > 0) {
+                processPreloadQueue();
+            }
+        }
+
+        function processPreloadQueue() {
+            if (isPreloading || glbPreloadQueue.length === 0) return;
+
+            isPreloading = true;
+            const modelPath = glbPreloadQueue.shift();
+
+            console.log('⏬ Precargando:', modelPath);
+
+            fetch(modelPath)
+                .then(function(response) {
+                    if (!response.ok) {
+                        throw new Error('HTTP error! status: ' + response.status);
+                    }
+                    return response.blob();
+                })
+                .then(function(blob) {
+                    // Crear URL del blob y guardarlo en caché
+                    const blobUrl = URL.createObjectURL(blob);
+                    glbCache[modelPath] = blobUrl;
+                    console.log('✅ Precargado:', modelPath, '(' + (blob.size / 1024 / 1024).toFixed(2) + ' MB)');
+
+                    // Continuar con el siguiente en la cola
+                    isPreloading = false;
+                    if (glbPreloadQueue.length > 0) {
+                        // Pequeña pausa entre descargas para no saturar
+                        setTimeout(processPreloadQueue, 100);
+                    } else {
+                        console.log('🎉 Todos los modelos GLB precargados!');
+                    }
+                })
+                .catch(function(error) {
+                    console.warn('⚠️ Error precargando ' + modelPath + ':', error);
+                    // Continuar con el siguiente aunque falle
+                    isPreloading = false;
+                    if (glbPreloadQueue.length > 0) {
+                        setTimeout(processPreloadQueue, 100);
+                    }
+                });
+        }
+
+        function getModelPath(originalPath) {
+            // Si está en caché, devolver la URL del blob, sino el path original
+            return glbCache[originalPath] || originalPath;
+        }
+
         // Smoothed rotation values
         var currentRotation = { x: 0, y: 0, z: 0 };
         var targetRotation = { x: 0, y: 0, z: 0 };
@@ -324,28 +400,34 @@ function flu_3d_aframe_functionality() {
 
                 if (isInCapturado) {
                     console.log('📍 Encontrado .flu-captura en #capturado');
-                    const flu3dImg = div.querySelector('.flu-3d img');
 
-                    if (flu3dImg) {
-                        console.log('✅ Imagen .flu-3d encontrada en #capturado');
-                        console.log('   - src:', flu3dImg.src);
+                    // SOLO crear el modelo si YA estamos en #capturado al cargar la página
+                    if (window.location.hash === '#capturado') {
+                        const flu3dImg = div.querySelector('.flu-3d img');
 
-                        if (flu3dImg.src) {
-                            const imgSrc = flu3dImg.src;
-                            const fileName = imgSrc.split('/').pop().split('.')[0];
-                            const modelPath = '/wp-content/uploads/' + fileName + '.glb';
+                        if (flu3dImg) {
+                            console.log('✅ Imagen .flu-3d encontrada en #capturado');
+                            console.log('   - src:', flu3dImg.src);
 
-                            console.log('🎯 Ruta del modelo GLB:', modelPath);
-                            flu3dImg.style.display = 'none';
+                            if (flu3dImg.src) {
+                                const imgSrc = flu3dImg.src;
+                                const fileName = imgSrc.split('/').pop().split('.')[0];
+                                const modelPath = '/wp-content/uploads/' + fileName + '.glb';
 
-                            console.log('🚀 Llamando a createModelAFrameSceneForCapturado...');
-                            createModelAFrameSceneForCapturado(div, modelPath);
+                                console.log('🎯 Ruta del modelo GLB:', modelPath);
+                                flu3dImg.style.display = 'none';
+
+                                console.log('🚀 Llamando a createModelAFrameSceneForCapturado...');
+                                createModelAFrameSceneForCapturado(div, modelPath);
+                            } else {
+                                console.error('❌ La imagen no tiene src');
+                            }
                         } else {
-                            console.error('❌ La imagen no tiene src');
+                            console.error('❌ No se encontró .flu-3d img en #capturado');
+                            console.log('   - HTML del contenedor:', div.innerHTML.substring(0, 200));
                         }
                     } else {
-                        console.error('❌ No se encontró .flu-3d img en #capturado');
-                        console.log('   - HTML del contenedor:', div.innerHTML.substring(0, 200));
+                        console.log('⏸️ #capturado encontrado pero no estamos en ese hash, esperando navegación');
                     }
                 } else if (!isInCaptura) {
                     console.log('📍 .flu-captura fuera de #captura y #capturado');
@@ -385,8 +467,26 @@ function flu_3d_aframe_functionality() {
                             flu3dInCapturado.forEach(function(div, idx) {
                                 console.log('   - Verificando .flu-captura[' + idx + '] en #capturado');
                                 const existingScene = div.querySelector('a-scene');
+
                                 if (existingScene) {
-                                    console.log('   ✅ Ya tiene a-scene');
+                                    console.log('   ✅ Ya tiene a-scene, ajustando parámetros para #capturado...');
+
+                                    // Buscar el modelo dentro de la escena
+                                    const model = existingScene.querySelector('a-gltf-model');
+                                    if (model) {
+                                        // Cambiar los parámetros al estilo de #capturado
+                                        model.setAttribute('position', '0 1.6 -2.2');
+                                        model.setAttribute('scale', '1.3 1.3 1.3');
+                                        model.setAttribute('rotation', '-10 0 0');
+                                        console.log('   🎨 Parámetros ajustados a estilo #capturado');
+                                    }
+
+                                    // Ocultar el loader si existe
+                                    const existingLoader = div.querySelector('.virus-loader');
+                                    if (existingLoader) {
+                                        existingLoader.classList.add('hidden');
+                                    }
+
                                 } else {
                                     console.log('   ❌ NO tiene a-scene, intentando crear...');
                                     const flu3dImg = div.querySelector('.flu-3d img');
@@ -420,7 +520,70 @@ function flu_3d_aframe_functionality() {
             if (window.location.hash === '#capturado') {
                 console.log('🎯 Página cargada ya en #capturado');
             }
+
+            // PRECARGA DE MODELOS GLB
+            preloadAllGLBModels();
         });
+
+        function preloadAllGLBModels() {
+            console.log('📦 Iniciando precarga de modelos GLB...');
+
+            // Encontrar todas las imágenes .flu-3d que indican un modelo GLB
+            const allFlu3dImages = document.querySelectorAll('.flu-3d img');
+            const modelsToPreload = [];
+
+            allFlu3dImages.forEach(function(img) {
+                if (img.src) {
+                    const imgSrc = img.src;
+                    const fileName = imgSrc.split('/').pop().split('.')[0];
+                    const modelPath = '/wp-content/uploads/' + fileName + '.glb';
+
+                    if (!modelsToPreload.includes(modelPath)) {
+                        modelsToPreload.push(modelPath);
+                    }
+                }
+            });
+
+            console.log('📋 Modelos GLB encontrados:', modelsToPreload.length);
+
+            if (modelsToPreload.length === 0) {
+                console.log('⚠️ No hay modelos para precargar');
+                return;
+            }
+
+            // Crear elementos <link rel="preload"> para cada modelo
+            modelsToPreload.forEach(function(modelPath, index) {
+                // Pequeño delay entre cada precarga para no saturar la red
+                setTimeout(function() {
+                    const link = document.createElement('link');
+                    link.rel = 'prefetch';
+                    link.href = modelPath;
+                    link.as = 'fetch';
+                    link.crossOrigin = 'anonymous';
+                    document.head.appendChild(link);
+
+                    console.log('⏬ Precargando [' + (index + 1) + '/' + modelsToPreload.length + ']:', modelPath);
+
+                    // También intentar fetch para forzar la descarga
+                    fetch(modelPath, {
+                        mode: 'cors',
+                        cache: 'force-cache'
+                    })
+                        .then(function(response) {
+                            if (response.ok) {
+                                return response.blob();
+                            }
+                            throw new Error('Error HTTP: ' + response.status);
+                        })
+                        .then(function(blob) {
+                            console.log('✅ Precargado [' + (index + 1) + '/' + modelsToPreload.length + ']: ' + modelPath + ' (' + (blob.size / 1024 / 1024).toFixed(2) + ' MB)');
+                        })
+                        .catch(function(error) {
+                            console.warn('⚠️ Error precargando ' + modelPath + ':', error);
+                        });
+                }, index * 500); // 500ms entre cada descarga
+            });
+        }
 
         function handleCapturaHash() {
             if (window.location.hash === '#captura' && !cameraInitialized) {
@@ -902,6 +1065,13 @@ function flu_3d_aframe_functionality() {
             console.log('🎬 createModelAFrameSceneForCapturado INICIADO');
             console.log('   - Container:', container);
             console.log('   - Model path:', modelPath);
+
+            // Ocultar la imagen placeholder
+            const flu3dImg = container.querySelector('.flu-3d img');
+            if (flu3dImg) {
+                flu3dImg.style.display = 'none';
+                console.log('🖼️ Imagen placeholder oculta');
+            }
 
             // Verificar si ya existe un a-scene
             const existingScene = container.querySelector('a-scene');
