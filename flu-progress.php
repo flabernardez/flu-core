@@ -191,11 +191,11 @@ function flu_core_add_visited_css() {
         /* Virus bloqueados - progreso secuencial - only for virus pages */
         .progreso li.locked {
             opacity: 0.5;
-            pointer-events: auto; /* Permitir click para mostrar aviso */
+            pointer-events: auto;
         }
         
         .progreso li.locked a {
-            cursor: pointer; /* Permitir click para mostrar aviso */
+            cursor: pointer;
             pointer-events: auto;
         }
         
@@ -221,7 +221,7 @@ function flu_core_add_visited_css() {
             top: 0;
             left: 0;
             height: 100vh;
-            background: rgba(0, 0, 0, 0.85);
+            background: rgba(0, 0, 0, 0.20);
             backdrop-filter: blur(8px);
             display: none;
             align-items: center;
@@ -240,11 +240,7 @@ function flu_core_add_visited_css() {
         .virus-locked-modal {
             background-color: var(--wp--preset--color--custom-white);
             border-radius: 32px;
-            padding-top: var(--wp--preset--spacing--50);
-            padding-right: var(--wp--preset--spacing--50);
-            padding-bottom: var(--wp--preset--spacing--50);
-            padding-left: var(--wp--preset--spacing--50);
-            max-width: 400px;
+            padding: var(--wp--preset--spacing--50);
             text-align: center;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
             transform: scale(0.9);
@@ -263,10 +259,7 @@ function flu_core_add_visited_css() {
         .virus-locked-title {
             font-family: var(--wp--preset--font-family--nunito) !important;
             font-size: var(--wp--preset--font-size--large);
-            font-style: normal;
             font-weight: 900;
-            letter-spacing: 0;
-            line-height: 1;
             text-transform: uppercase;
             color: var(--wp--preset--color--custom-green-dark);
             margin-bottom: 12px;
@@ -281,21 +274,14 @@ function flu_core_add_visited_css() {
         }
 
         .virus-locked-button {
+            color: var(--wp--preset--color--custom-green-dark);
             font-family: var(--wp--preset--font-family--inter);
             font-size: var(--wp--preset--font-size--medium);
-            line-height: 1.3;
             background-color: var(--wp--preset--color--custom-yellow);
-            color: var(--wp--preset--color--base, #000);
             border: none;
-            padding-top: var(--wp--preset--spacing--30);
-            padding-right: var(--wp--preset--spacing--40);
-            padding-bottom: var(--wp--preset--spacing--30);
-            padding-left: var(--wp--preset--spacing--40);
+            padding: var(--wp--preset--spacing--30) var(--wp--preset--spacing--40);
             border-radius: 9999px;
             cursor: pointer;
-            touch-action: manipulation;
-            width: auto;
-            display: inline-block;
             transition: transform 0.1s ease;
         }
 
@@ -308,9 +294,8 @@ function flu_core_add_visited_css() {
             position: fixed;
             top: 0;
             left: 0;
-            width: 100vw;
             height: 100vh;
-            background: rgba(0, 0, 0, 0.85);
+            background: rgba(0, 0, 0, 0.20);
             backdrop-filter: blur(8px);
             display: flex;
             align-items: center;
@@ -330,11 +315,7 @@ function flu_core_add_visited_css() {
         .river-complete-modal {
             background-color: var(--wp--preset--color--custom-white);
             border-radius: 32px;
-            padding-top: var(--wp--preset--spacing--50);
-            padding-right: var(--wp--preset--spacing--50);
-            padding-bottom: var(--wp--preset--spacing--50);
-            padding-left: var(--wp--preset--spacing--50);
-            max-width: 400px;
+            padding: var(--wp--preset--spacing--50);
             text-align: center;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
             transform: scale(0.9);
@@ -359,10 +340,7 @@ function flu_core_add_visited_css() {
         .river-complete-title {
             font-family: var(--wp--preset--font-family--nunito) !important;
             font-size: var(--wp--preset--font-size--large);
-            font-style: normal;
             font-weight: 900;
-            letter-spacing: 0;
-            line-height: 1;
             text-transform: uppercase;
             color: var(--wp--preset--color--custom-green-dark);
             margin-bottom: 12px;
@@ -377,21 +355,14 @@ function flu_core_add_visited_css() {
         }
 
         .river-complete-button {
+            color: var(--wp--preset--color--custom-green-dark);
             font-family: var(--wp--preset--font-family--inter);
             font-size: var(--wp--preset--font-size--medium);
-            line-height: 1.3;
             background-color: var(--wp--preset--color--custom-yellow);
-            color: var(--wp--preset--color--base, #000);
             border: none;
-            padding-top: var(--wp--preset--spacing--30);
-            padding-right: var(--wp--preset--spacing--40);
-            padding-bottom: var(--wp--preset--spacing--30);
-            padding-left: var(--wp--preset--spacing--40);
+            padding: var(--wp--preset--spacing--30) var(--wp--preset--spacing--40);
             border-radius: 9999px;
             cursor: pointer;
-            touch-action: manipulation;
-            width: auto;
-            display: inline-block;
             transition: transform 0.1s ease;
         }
 
@@ -418,7 +389,6 @@ function flu_core_track_page_visit() {
     $visited = [];
     $captured = [];
 
-    // Get existing visited pages from cookie
     if ( isset( $_COOKIE[ $cookie_name ] ) ) {
         $visited = json_decode( stripslashes( $_COOKIE[ $cookie_name ] ), true );
         if ( ! is_array( $visited ) ) {
@@ -426,7 +396,6 @@ function flu_core_track_page_visit() {
         }
     }
 
-    // Get existing captured pages from cookie
     if ( isset( $_COOKIE[ $captured_cookie_name ] ) ) {
         $captured = json_decode( stripslashes( $_COOKIE[ $captured_cookie_name ] ), true );
         if ( ! is_array( $captured ) ) {
@@ -434,17 +403,12 @@ function flu_core_track_page_visit() {
         }
     }
 
-    // Add current page if not already visited - APPLIES TO ALL PAGES
-    // Use canonical ID so all translations share the same cookie
     if ( ! in_array( $canonical_page_id, $visited ) ) {
         $visited[] = $canonical_page_id;
-
-        // Set cookie for 1 year
-        $expire_time = time() + ( 365 * 24 * 60 * 60 ); // 1 year
+        $expire_time = time() + ( 365 * 24 * 60 * 60 );
         setcookie( $cookie_name, json_encode( $visited ), $expire_time, '/' );
     }
 
-    // Check if URL contains #atrapado and track capture - ONLY FOR VIRUS PAGES
     if ( flu_core_is_virus_page() ) {
         if ( isset( $_SERVER['REQUEST_URI'] ) && strpos( $_SERVER['REQUEST_URI'], '#atrapado' ) !== false ) {
             if ( ! in_array( $canonical_page_id, $captured ) ) {
@@ -456,22 +420,16 @@ function flu_core_track_page_visit() {
 }
 add_action( 'template_redirect', 'flu_core_track_page_visit' );
 
-/**
- * AJAX handler to track visited pages from links
- */
 function flu_core_ajax_track_visit() {
     $page_id = intval( $_POST['page_id'] );
-
     if ( ! $page_id ) {
         wp_send_json_error( 'Invalid page ID' );
     }
 
     $canonical_page_id = flu_core_get_canonical_page_id( $page_id );
-
     $cookie_name = 'flu_visited_pages';
     $visited = [];
 
-    // Get existing visited pages from cookie
     if ( isset( $_COOKIE[ $cookie_name ] ) ) {
         $visited = json_decode( stripslashes( $_COOKIE[ $cookie_name ] ), true );
         if ( ! is_array( $visited ) ) {
@@ -479,11 +437,8 @@ function flu_core_ajax_track_visit() {
         }
     }
 
-    // Add page if not already visited (use canonical ID)
     if ( ! in_array( $canonical_page_id, $visited ) ) {
         $visited[] = $canonical_page_id;
-
-        // Set cookie for 1 year
         $expire_time = time() + ( 365 * 24 * 60 * 60 );
         setcookie( $cookie_name, json_encode( $visited ), $expire_time, '/' );
     }
@@ -493,22 +448,16 @@ function flu_core_ajax_track_visit() {
 add_action( 'wp_ajax_flu_core_track_visit', 'flu_core_ajax_track_visit' );
 add_action( 'wp_ajax_nopriv_flu_core_track_visit', 'flu_core_ajax_track_visit' );
 
-/**
- * AJAX handler to track captured pages (reached #atrapado)
- */
 function flu_core_ajax_track_capture() {
     $page_id = intval( $_POST['page_id'] );
-
     if ( ! $page_id ) {
         wp_send_json_error( 'Invalid page ID' );
     }
 
     $canonical_page_id = flu_core_get_canonical_page_id( $page_id );
-
     $cookie_name = 'flu_captured_pages';
     $captured = [];
 
-    // Get existing captured pages from cookie
     if ( isset( $_COOKIE[ $cookie_name ] ) ) {
         $captured = json_decode( stripslashes( $_COOKIE[ $cookie_name ] ), true );
         if ( ! is_array( $captured ) ) {
@@ -516,11 +465,8 @@ function flu_core_ajax_track_capture() {
         }
     }
 
-    // Add page if not already captured (use canonical ID)
     if ( ! in_array( $canonical_page_id, $captured ) ) {
         $captured[] = $canonical_page_id;
-
-        // Set cookie for 1 year
         $expire_time = time() + ( 365 * 24 * 60 * 60 );
         setcookie( $cookie_name, json_encode( $captured ), $expire_time, '/' );
     }
@@ -530,11 +476,7 @@ function flu_core_ajax_track_capture() {
 add_action( 'wp_ajax_flu_core_track_capture', 'flu_core_ajax_track_capture' );
 add_action( 'wp_ajax_nopriv_flu_core_track_capture', 'flu_core_ajax_track_capture' );
 
-/**
- * AJAX handler to check if all viruses in a zone (arga or ultzama) are captured
- */
 function flu_core_ajax_check_zone_completion() {
-    // Get all captured pages
     $cookie_name = 'flu_captured_pages';
     $captured = [];
 
@@ -545,15 +487,8 @@ function flu_core_ajax_check_zone_completion() {
         }
     }
 
-    error_log( '=== ZONE COMPLETION CHECK (POLYLANG) ===' );
-    error_log( 'Captured pages (canonical IDs): ' . print_r( $captured, true ) );
-
-    // Get parent page IDs for zones
     $arga_parent_id = flu_core_get_zone_parent_id( 'arga' );
     $ultzama_parent_id = flu_core_get_zone_parent_id( 'ultzama' );
-
-    error_log( 'ARGA parent ID: ' . ( $arga_parent_id ?: 'NOT FOUND' ) );
-    error_log( 'ULTZAMA parent ID: ' . ( $ultzama_parent_id ?: 'NOT FOUND' ) );
 
     $expire_time = time() + ( 365 * 24 * 60 * 60 );
 
@@ -565,7 +500,6 @@ function flu_core_ajax_check_zone_completion() {
         'captured' => $captured
     );
 
-    // Check ARGA
     if ( $arga_parent_id ) {
         $arga_children_posts = get_posts( array(
             'post_type' => 'page',
@@ -574,10 +508,9 @@ function flu_core_ajax_check_zone_completion() {
             'numberposts' => -1,
             'orderby' => 'menu_order',
             'order' => 'ASC',
-            'suppress_filters' => false // Important for Polylang
+            'suppress_filters' => false
         ) );
 
-        // Get canonical IDs for all children
         $arga_children = array();
         foreach ( $arga_children_posts as $child ) {
             $canonical_id = flu_core_get_canonical_page_id( $child->ID );
@@ -587,26 +520,14 @@ function flu_core_ajax_check_zone_completion() {
         }
 
         $response['arga_children'] = $arga_children;
-
-        error_log( 'ARGA children (canonical IDs): ' . print_r( $arga_children, true ) );
-        error_log( 'ARGA children count: ' . count( $arga_children ) );
-
-        // Check if all arga viruses are captured
         $all_arga_captured = !empty($arga_children) && empty(array_diff($arga_children, $captured));
-
-        error_log( 'All ARGA captured: ' . ( $all_arga_captured ? 'YES' : 'NO' ) );
 
         if ( $all_arga_captured ) {
             setcookie( 'arga_completado', 'si', $expire_time, '/' );
             $response['arga_status'] = 'complete';
-            error_log( '✅ ARGA completado - Cookie creada' );
-        } else {
-            $missing = array_diff($arga_children, $captured);
-            error_log( 'ARGA missing IDs: ' . print_r( $missing, true ) );
         }
     }
 
-    // Check ULTZAMA
     if ( $ultzama_parent_id ) {
         $ultzama_children_posts = get_posts( array(
             'post_type' => 'page',
@@ -615,10 +536,9 @@ function flu_core_ajax_check_zone_completion() {
             'numberposts' => -1,
             'orderby' => 'menu_order',
             'order' => 'ASC',
-            'suppress_filters' => false // Important for Polylang
+            'suppress_filters' => false
         ) );
 
-        // Get canonical IDs for all children
         $ultzama_children = array();
         foreach ( $ultzama_children_posts as $child ) {
             $canonical_id = flu_core_get_canonical_page_id( $child->ID );
@@ -628,26 +548,13 @@ function flu_core_ajax_check_zone_completion() {
         }
 
         $response['ultzama_children'] = $ultzama_children;
-
-        error_log( 'ULTZAMA children (canonical IDs): ' . print_r( $ultzama_children, true ) );
-        error_log( 'ULTZAMA children count: ' . count( $ultzama_children ) );
-
-        // Check if all ultzama viruses are captured
         $all_ultzama_captured = !empty($ultzama_children) && empty(array_diff($ultzama_children, $captured));
-
-        error_log( 'All ULTZAMA captured: ' . ( $all_ultzama_captured ? 'YES' : 'NO' ) );
 
         if ( $all_ultzama_captured ) {
             setcookie( 'ultzama_completado', 'si', $expire_time, '/' );
             $response['ultzama_status'] = 'complete';
-            error_log( '✅ ULTZAMA completado - Cookie creada' );
-        } else {
-            $missing = array_diff($ultzama_children, $captured);
-            error_log( 'ULTZAMA missing IDs: ' . print_r( $missing, true ) );
         }
     }
-
-    error_log( '=== END ZONE COMPLETION CHECK ===' );
 
     wp_send_json_success( $response );
 }
@@ -658,7 +565,6 @@ add_action( 'wp_ajax_nopriv_flu_core_check_zone_completion', 'flu_core_ajax_chec
  * Add visited class to elements and track clicks
  */
 function flu_core_add_visited_functionality() {
-    // JavaScript functionality applies to ALL pages with .progreso elements
     ?>
     <script>
         function getCookie(name) {
@@ -671,11 +577,7 @@ function flu_core_add_visited_functionality() {
         function getVisitedPages() {
             const cookie = getCookie('flu_visited_pages');
             if (cookie) {
-                try {
-                    return JSON.parse(decodeURIComponent(cookie));
-                } catch (e) {
-                    return [];
-                }
+                try { return JSON.parse(decodeURIComponent(cookie)); } catch (e) { return []; }
             }
             return [];
         }
@@ -683,24 +585,14 @@ function flu_core_add_visited_functionality() {
         function getCapturedPages() {
             const cookie = getCookie('flu_captured_pages');
             if (cookie) {
-                try {
-                    return JSON.parse(decodeURIComponent(cookie));
-                } catch (e) {
-                    return [];
-                }
+                try { return JSON.parse(decodeURIComponent(cookie)); } catch (e) { return []; }
             }
             return [];
         }
 
-        // Get canonical page ID from data attribute
         function getCanonicalPageId(element) {
-            // Try to get from data-canonical-id attribute first
             const canonicalId = element.getAttribute('data-canonical-id');
-            if (canonicalId) {
-                return parseInt(canonicalId);
-            }
-
-            // Fallback to post-{id} class
+            if (canonicalId) return parseInt(canonicalId);
             const classList = element.className;
             const match = classList.match(/post-(\d+)/);
             return match ? parseInt(match[1]) : null;
@@ -713,87 +605,53 @@ function flu_core_add_visited_functionality() {
 
             progressoLoops.forEach(function(loop) {
                 const listItems = loop.querySelectorAll('li[class*="post-"]');
-
                 listItems.forEach(function(li) {
                     const pageId = getCanonicalPageId(li);
-
                     if (pageId) {
-                        if (visitedPages.includes(pageId)) {
-                            li.classList.add('visited');
-                        }
-
-                        if (capturedPages.includes(pageId)) {
-                            li.classList.add('captured');
-                        }
+                        if (visitedPages.includes(pageId)) li.classList.add('visited');
+                        if (capturedPages.includes(pageId)) li.classList.add('captured');
                     }
                 });
             });
         }
 
         function applySequentialUnlock() {
-            // Solo aplicar bloqueo secuencial en páginas de virus
             const currentPath = window.location.pathname;
             const isVirusPage = currentPath.includes('/virus/') || currentPath.includes('/birusa-goian/');
+            if (!isVirusPage) return;
 
-            if (!isVirusPage) {
-                console.log('🔓 No estamos en página de virus - todos los enlaces desbloqueados');
-                return;
-            }
-
-            console.log('🔓 Aplicando desbloqueo secuencial');
             const capturedPages = getCapturedPages();
             const progressoLoops = document.querySelectorAll('.wp-block-query.progreso');
 
             progressoLoops.forEach(function(loop) {
                 const listItems = Array.from(loop.querySelectorAll('li[class*="post-"]'));
-
-                console.log('📋 Lista de virus encontrados:', listItems.length);
-
                 let nextUnlocked = -1;
+
                 for (let i = 0; i < listItems.length; i++) {
                     const li = listItems[i];
                     const pageId = getCanonicalPageId(li);
-
                     if (pageId && !capturedPages.includes(pageId)) {
                         nextUnlocked = i;
-                        console.log('🎯 Próximo virus a desbloquear: índice', i, 'ID', pageId);
                         break;
                     }
                 }
 
-                if (nextUnlocked === -1) {
-                    nextUnlocked = listItems.length;
-                    console.log('✅ Todos los virus capturados');
-                }
+                if (nextUnlocked === -1) nextUnlocked = listItems.length;
 
                 listItems.forEach(function(li, index) {
                     const pageId = getCanonicalPageId(li);
-
                     if (pageId) {
                         const isCaptured = capturedPages.includes(pageId);
-
                         if (isCaptured || index === nextUnlocked) {
                             li.classList.remove('locked');
                             li.classList.add('unlocked');
-
-                            // Remover clase bloqueada del contenedor
                             const sinCapturar = li.querySelector('.sin-capturar');
-                            if (sinCapturar) {
-                                sinCapturar.classList.remove('bloqueada');
-                            }
-
-                            console.log('🔓 Desbloqueado:', pageId, '(índice', index + ')');
+                            if (sinCapturar) sinCapturar.classList.remove('bloqueada');
                         } else {
                             li.classList.add('locked');
                             li.classList.remove('unlocked');
-
-                            // Añadir clase bloqueada al contenedor .sin-capturar
                             const sinCapturar = li.querySelector('.sin-capturar');
-                            if (sinCapturar) {
-                                sinCapturar.classList.add('bloqueada');
-                            }
-
-                            console.log('🔒 Bloqueado:', pageId, '(índice', index + ')');
+                            if (sinCapturar) sinCapturar.classList.add('bloqueada');
                         }
                     }
                 });
@@ -806,33 +664,21 @@ function flu_core_add_visited_functionality() {
 
             progressoLoops.forEach(function(loop) {
                 const listItems = loop.querySelectorAll('li[class*="post-"]');
-
                 listItems.forEach(function(li) {
                     const pageId = getCanonicalPageId(li);
-
                     if (pageId && capturedPages.includes(pageId)) {
-                        // Buscar el contenedor .capturado
                         const capturadoDiv = li.querySelector('.wp-block-group.capturado');
-
                         if (capturadoDiv) {
-                            // Obtener la URL de la página
                             const linkElement = li.querySelector('a[href]');
                             if (linkElement) {
                                 const baseUrl = linkElement.getAttribute('href').split('#')[0];
                                 const targetUrl = baseUrl + '#capturado';
-
-                                // Hacer el div clickeable
                                 capturadoDiv.style.cursor = 'pointer';
-
-                                // Añadir event listener
                                 capturadoDiv.addEventListener('click', function(e) {
                                     e.preventDefault();
                                     e.stopPropagation();
                                     window.location.href = targetUrl;
-                                    console.log('🎯 Navegando a virus capturado:', targetUrl);
                                 });
-
-                                console.log('✅ Div .capturado clickeable configurado para ID:', pageId);
                             }
                         }
                     }
@@ -841,7 +687,6 @@ function flu_core_add_visited_functionality() {
         }
 
         function showVirusLockedModal() {
-            // Detectar idioma desde la URL
             const currentPath = window.location.pathname;
             const isEuskera = currentPath.includes('/eu/');
 
@@ -876,23 +721,17 @@ function flu_core_add_visited_functionality() {
             overlay.appendChild(modal);
             document.body.appendChild(overlay);
 
-            setTimeout(function() {
-                overlay.classList.add('show');
-            }, 10);
+            setTimeout(function() { overlay.classList.add('show'); }, 10);
 
             button.addEventListener('click', function() {
                 overlay.classList.remove('show');
-                setTimeout(function() {
-                    document.body.removeChild(overlay);
-                }, 300);
+                setTimeout(function() { document.body.removeChild(overlay); }, 300);
             });
 
             overlay.addEventListener('click', function(e) {
                 if (e.target === overlay) {
                     overlay.classList.remove('show');
-                    setTimeout(function() {
-                        document.body.removeChild(overlay);
-                    }, 300);
+                    setTimeout(function() { document.body.removeChild(overlay); }, 300);
                 }
             });
         }
@@ -900,12 +739,10 @@ function flu_core_add_visited_functionality() {
         function trackLinkClicks() {
             const currentPath = window.location.pathname;
             const isVirusPage = currentPath.includes('/virus/') || currentPath.includes('/birusa-goian/');
-
             const progressoLoops = document.querySelectorAll('.wp-block-query.progreso');
 
             progressoLoops.forEach(function(loop) {
                 const links = loop.querySelectorAll('a[href]');
-
                 links.forEach(function(link) {
                     link.addEventListener('click', function(e) {
                         const listItem = this.closest('li[class*="post-"]');
@@ -913,20 +750,15 @@ function flu_core_add_visited_functionality() {
                             if (isVirusPage && listItem.classList.contains('locked')) {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                console.log('🔒 Virus bloqueado - mostrando aviso');
                                 showVirusLockedModal();
                                 return false;
                             }
-
                             const pageId = getCanonicalPageId(listItem);
-
                             if (pageId) {
                                 const xhr = new XMLHttpRequest();
                                 xhr.open('POST', '<?php echo admin_url('admin-ajax.php'); ?>');
                                 xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-
-                                const data = 'action=flu_core_track_visit&page_id=' + pageId;
-                                xhr.send(data);
+                                xhr.send('action=flu_core_track_visit&page_id=' + pageId);
                             }
                         }
                     });
@@ -935,181 +767,70 @@ function flu_core_add_visited_functionality() {
         }
 
         function trackCaptureWhenAtrapado() {
-            if (window.location.hash === '#atrapado') {
+            function captureCurrentPage() {
                 const currentPageId = document.body.className.match(/page-id-(\d+)/);
                 if (currentPageId && currentPageId[1]) {
                     const xhr = new XMLHttpRequest();
                     xhr.open('POST', '<?php echo admin_url('admin-ajax.php'); ?>');
                     xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-
-                    const data = 'action=flu_core_track_capture&page_id=' + currentPageId[1];
-                    xhr.send(data);
-
+                    xhr.send('action=flu_core_track_capture&page_id=' + currentPageId[1]);
                     xhr.onload = function() {
                         if (xhr.status === 200) {
-                            console.log('Virus capturado, actualizando enlaces y verificando zonas...');
                             setTimeout(function() {
                                 markVisitedElements();
                                 applySequentialUnlock();
                                 makeCapturadoClickable();
                                 checkZoneCompletion();
-
-                                // Verificar si se completó algún río después de capturar
-                                setTimeout(function() {
-                                    checkAndShowRiverModalsAfterCapture();
-                                }, 500);
                             }, 100);
                         }
                     };
                 }
             }
 
+            if (window.location.hash === '#atrapado') captureCurrentPage();
             window.addEventListener('hashchange', function() {
-                if (window.location.hash === '#atrapado') {
-                    const currentPageId = document.body.className.match(/page-id-(\d+)/);
-                    if (currentPageId && currentPageId[1]) {
-                        const xhr = new XMLHttpRequest();
-                        xhr.open('POST', '<?php echo admin_url('admin-ajax.php'); ?>');
-                        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-
-                        const data = 'action=flu_core_track_capture&page_id=' + currentPageId[1];
-                        xhr.send(data);
-
-                        xhr.onload = function() {
-                            if (xhr.status === 200) {
-                                console.log('Virus capturado, actualizando enlaces y verificando zonas...');
-                                setTimeout(function() {
-                                    markVisitedElements();
-                                    applySequentialUnlock();
-                                    makeCapturadoClickable();
-                                    checkZoneCompletion();
-
-                                    // Verificar si se completó algún río después de capturar
-                                    setTimeout(function() {
-                                        checkAndShowRiverModalsAfterCapture();
-                                    }, 500);
-                                }, 100);
-                            }
-                        };
-                    }
-                }
+                if (window.location.hash === '#atrapado') captureCurrentPage();
             });
         }
 
-        function checkAndShowRiverModalsAfterCapture() {
-            console.log('🔍 Verificando ríos completados después de captura...');
-
-            const argaCompleto = getCookie('arga_completado');
-            const ultzamaCompleto = getCookie('ultzama_completado');
-            const bothComplete = (argaCompleto === 'si' && ultzamaCompleto === 'si');
-
-            const argaModalShown = getCookie('flu_arga_modal_shown');
-            const ultzamaModalShown = getCookie('flu_ultzama_modal_shown');
-
-            // Si ambos están completos, mostrar el modal del que no se ha mostrado
-            if (bothComplete) {
-                if (argaCompleto === 'si' && argaModalShown !== 'si') {
-                    console.log('🎉 ¡ARGA completado! Mostrando modal...');
-                    showRiverCompleteModal('arga', true);
-                } else if (ultzamaCompleto === 'si' && ultzamaModalShown !== 'si') {
-                    console.log('🎉 ¡ULTZAMA completado! Mostrando modal...');
-                    showRiverCompleteModal('ultzama', true);
-                }
-            } else {
-                // Mostrar modal individual si se completó uno
-                if (argaCompleto === 'si' && argaModalShown !== 'si') {
-                    console.log('🎉 ¡ARGA completado! Mostrando modal...');
-                    showRiverCompleteModal('arga', false);
-                }
-
-                if (ultzamaCompleto === 'si' && ultzamaModalShown !== 'si') {
-                    console.log('🎉 ¡ULTZAMA completado! Mostrando modal...');
-                    setTimeout(function() {
-                        showRiverCompleteModal('ultzama', false);
-                    }, argaCompleto === 'si' ? 500 : 0);
-                }
-            }
-        }
-
         function checkZoneCompletion() {
-            console.log('🔍 Verificando completitud de zonas...');
-
-            // Guardar estado anterior de las cookies
             const argaCompletoBefore = getCookie('arga_completado');
             const ultzamaCompletoBefore = getCookie('ultzama_completado');
 
             const xhr = new XMLHttpRequest();
             xhr.open('POST', '<?php echo admin_url('admin-ajax.php'); ?>');
             xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-
-            const data = 'action=flu_core_check_zone_completion';
-            xhr.send(data);
+            xhr.send('action=flu_core_check_zone_completion');
 
             xhr.onload = function() {
                 if (xhr.status === 200) {
                     try {
                         const response = JSON.parse(xhr.responseText);
-                        console.log('✅ Respuesta del servidor:', response);
-
-                        if (response.success && response.data) {
-                            const data = response.data;
-
-                            console.log('📊 ARGA:', data.arga_status);
-                            console.log('📊 ULTZAMA:', data.ultzama_status);
-                        }
-
-                        // Verificar estado actual de las cookies
                         const argaCompletoAfter = getCookie('arga_completado');
                         const ultzamaCompletoAfter = getCookie('ultzama_completado');
 
-                        // Detectar si alguna zona se acaba de completar
                         const argaJustCompleted = (argaCompletoBefore !== 'si' && argaCompletoAfter === 'si');
                         const ultzamaJustCompleted = (ultzamaCompletoBefore !== 'si' && ultzamaCompletoAfter === 'si');
 
                         if (argaJustCompleted || ultzamaJustCompleted) {
-                            console.log('🔄 ¡Zona completada! Recargando página para mostrar medallita...');
-
-                            // Pequeño delay para que se vea el modal si está apareciendo
-                            setTimeout(function() {
-                                location.reload();
-                            }, 1000);
-
-                            return; // No seguir ejecutando, vamos a recargar
+                            // Solo recargar si estamos en la página padre /virus/ o /birusa-goian/
+                            if (isVirusParentPage()) {
+                                setTimeout(function() { location.reload(); }, 1000);
+                            }
+                            return;
                         }
 
-                        // Si ya estaban completadas antes, solo mostrar badges sin recargar
-                        if (argaCompletoAfter === 'si') {
-                            console.log('🎉 ¡ARGA COMPLETADO!');
-                            showCompletionBadges('arga');
-                        }
-                        if (ultzamaCompletoAfter === 'si') {
-                            console.log('🎉 ¡ULTZAMA COMPLETADO!');
-                            showCompletionBadges('ultzama');
-                        }
-                    } catch (e) {
-                        console.error('Error parsing response:', e);
-                    }
+                        if (argaCompletoAfter === 'si') showCompletionBadges('arga');
+                        if (ultzamaCompletoAfter === 'si') showCompletionBadges('ultzama');
+                    } catch (e) { console.error('Error parsing response:', e); }
                 }
             };
         }
 
         function showCompletionBadges(zone) {
-            console.log('🏅 Mostrando insignias de completitud para:', zone);
-
-            const badgesByClass = document.querySelectorAll('.' + zone + '-completado');
-            badgesByClass.forEach(function(badge) {
-                badge.style.display = 'block';
-            });
-
-            const badgesByData = document.querySelectorAll('[data-zone="' + zone + '"]');
-            badgesByData.forEach(function(badge) {
-                badge.style.display = 'block';
-            });
-
-            const images = document.querySelectorAll('img[alt*="' + zone + '"]');
-            images.forEach(function(img) {
-                img.style.display = 'block';
-            });
+            document.querySelectorAll('.' + zone + '-completado').forEach(function(badge) { badge.style.display = 'block'; });
+            document.querySelectorAll('[data-zone="' + zone + '"]').forEach(function(badge) { badge.style.display = 'block'; });
+            document.querySelectorAll('img[alt*="' + zone + '"]').forEach(function(img) { img.style.display = 'block'; });
         }
 
         function setCookie(name, value, days) {
@@ -1118,16 +839,28 @@ function flu_core_add_visited_functionality() {
             document.cookie = name + "=" + value + ";expires=" + expires.toUTCString() + ";path=/";
         }
 
+        function isVirusParentPage() {
+            const currentPath = window.location.pathname;
+            const cleanPath = currentPath.replace(/\/$/, '');
+            const pathParts = cleanPath.split('/').filter(p => p);
+            const lastPart = pathParts[pathParts.length - 1];
+            return (lastPart === 'virus' || lastPart === 'birusa-goian');
+        }
+
+        // Flag para evitar mostrar modales múltiples veces
+        var riverModalShowing = false;
+
         function showRiverCompleteModal(riverName, bothComplete) {
             const cookieName = 'flu_' + riverName + '_modal_shown';
-            if (getCookie(cookieName) === 'si') {
-                console.log('Modal de', riverName, 'ya mostrado anteriormente');
+            if (getCookie(cookieName) === 'si') return;
+
+            // Evitar mostrar el modal si ya hay uno mostrándose
+            if (riverModalShowing) {
+                console.log('⚠️ Ya hay un modal de río mostrándose, ignorando');
                 return;
             }
+            riverModalShowing = true;
 
-            console.log('🎉 Mostrando modal de río completado:', riverName);
-
-            // Detectar idioma desde la URL
             const currentPath = window.location.pathname;
             const isEuskera = currentPath.includes('/eu/');
 
@@ -1143,14 +876,10 @@ function flu_core_add_visited_functionality() {
 
             const title = document.createElement('div');
             title.className = 'river-complete-title';
-
-            // Título según idioma
             title.textContent = isEuskera ? 'Ibaia garbi!' : '¡Río limpio!';
 
             const text = document.createElement('div');
             text.className = 'river-complete-text';
-
-            // Texto según idioma y si ambos ríos están completos
             if (bothComplete) {
                 text.textContent = isEuskera
                     ? 'Ibaietako birusak garbitzen amaitu duzu! Zorionak!'
@@ -1172,45 +901,46 @@ function flu_core_add_visited_functionality() {
             overlay.appendChild(modal);
             document.body.appendChild(overlay);
 
-            setTimeout(function() {
-                overlay.classList.add('show');
-            }, 100);
+            setTimeout(function() { overlay.classList.add('show'); }, 100);
 
-            setCookie(cookieName, 'si', 365);
-
-            button.addEventListener('click', function() {
+            // SOLO guardar cookie cuando el usuario cierre el modal
+            function closeModal() {
+                setCookie(cookieName, 'si', 365);
                 overlay.classList.remove('show');
                 setTimeout(function() {
-                    document.body.removeChild(overlay);
+                    if (overlay.parentNode) {
+                        document.body.removeChild(overlay);
+                    }
+                    riverModalShowing = false;
                 }, 300);
-            });
+            }
+
+            button.addEventListener('click', closeModal);
 
             overlay.addEventListener('click', function(e) {
                 if (e.target === overlay) {
-                    overlay.classList.remove('show');
-                    setTimeout(function() {
-                        document.body.removeChild(overlay);
-                    }, 300);
+                    closeModal();
                 }
             });
         }
 
         function checkAndShowRiverModals() {
-            const currentPath = window.location.pathname;
-            if (!currentPath.includes('/virus/') && !currentPath.includes('/birusa-goian/')) {
+            // SOLO mostrar modales en páginas padre /virus/ o /birusa-goian/
+            if (!isVirusParentPage()) {
+                console.log('📍 No estamos en página padre de virus, no mostramos modales');
                 return;
             }
 
-            console.log('📍 Estamos en página de virus, verificando ríos completados...');
+            console.log('📍 Estamos en página padre, verificando ríos completados...');
 
             const argaCompleto = getCookie('arga_completado');
             const ultzamaCompleto = getCookie('ultzama_completado');
             const bothComplete = (argaCompleto === 'si' && ultzamaCompleto === 'si');
 
-            setTimeout(function() {
-                const argaModalShown = getCookie('flu_arga_modal_shown');
-                const ultzamaModalShown = getCookie('flu_ultzama_modal_shown');
+            const argaModalShown = getCookie('flu_arga_modal_shown');
+            const ultzamaModalShown = getCookie('flu_ultzama_modal_shown');
 
+            setTimeout(function() {
                 if (bothComplete) {
                     if (argaCompleto === 'si' && argaModalShown !== 'si') {
                         showRiverCompleteModal('arga', true);
@@ -1218,64 +948,33 @@ function flu_core_add_visited_functionality() {
                         showRiverCompleteModal('ultzama', true);
                     }
                 } else {
-                    if (argaCompleto === 'si') {
+                    if (argaCompleto === 'si' && argaModalShown !== 'si') {
                         showRiverCompleteModal('arga', false);
                     }
-
-                    if (ultzamaCompleto === 'si') {
-                        const delay = argaCompleto === 'si' ? 500 : 0;
-                        setTimeout(function() {
-                            showRiverCompleteModal('ultzama', false);
-                        }, delay);
+                    if (ultzamaCompleto === 'si' && ultzamaModalShown !== 'si') {
+                        const delay = (argaCompleto === 'si' && argaModalShown !== 'si') ? 500 : 0;
+                        setTimeout(function() { showRiverCompleteModal('ultzama', false); }, delay);
                     }
                 }
             }, 800);
         }
 
-        // Verificar zona completada periódicamente en páginas padre
         function checkZoneOnReturn() {
-            const currentPath = window.location.pathname;
-
-            // Función que verifica si estamos en página padre de virus
-            function isVirusParentPage() {
-                // Detectar si estamos en /virus o /virus/ o /eu/birusa-goian o /eu/birusa-goian/
-                const pathParts = currentPath.split('/').filter(p => p);
-                const lastPart = pathParts[pathParts.length - 1];
-
-                return lastPart === 'virus' || lastPart === 'birusa-goian';
-            }
-
-            // Verificar al cambiar hash
             window.addEventListener('hashchange', function() {
                 if (isVirusParentPage()) {
-                    console.log('🔄 Hash cambió en página padre, verificando completitud...');
-
                     checkZoneCompletion();
-
-                    setTimeout(function() {
-                        checkAndShowRiverModals();
-                    }, 500);
+                    setTimeout(function() { checkAndShowRiverModals(); }, 500);
                 }
             });
 
-            // Verificar también al cargar la página si estamos en página padre
             if (isVirusParentPage()) {
-                console.log('🔄 Página padre cargada, verificando completitud...');
-
-                // Verificar periódicamente (por si vienen de misiones intermedias)
                 let verificationCount = 0;
                 const verificationInterval = setInterval(function() {
                     checkZoneCompletion();
                     verificationCount++;
-
-                    // Verificar 3 veces: al cargar, después de 1s y después de 2s
                     if (verificationCount >= 3) {
                         clearInterval(verificationInterval);
-
-                        // Después de las verificaciones, mostrar modal si corresponde
-                        setTimeout(function() {
-                            checkAndShowRiverModals();
-                        }, 300);
+                        setTimeout(function() { checkAndShowRiverModals(); }, 300);
                     }
                 }, 1000);
             }
@@ -1290,27 +989,18 @@ function flu_core_add_visited_functionality() {
 
             if (isVirusPage) {
                 applySequentialUnlock();
-                makeCapturadoClickable(); // ← NUEVA FUNCIÓN
+                makeCapturadoClickable();
                 trackCaptureWhenAtrapado();
                 checkZoneCompletion();
-                checkAndShowRiverModals();
+                // checkAndShowRiverModals se llama desde checkZoneOnReturn después de las verificaciones
                 checkZoneOnReturn();
 
                 setTimeout(function() {
-                    const argaCompleto = getCookie('arga_completado');
-                    const ultzamaCompleto = getCookie('ultzama_completado');
-
-                    if (argaCompleto === 'si') {
-                        showCompletionBadges('arga');
-                    }
-                    if (ultzamaCompleto === 'si') {
-                        showCompletionBadges('ultzama');
-                    }
+                    if (getCookie('arga_completado') === 'si') showCompletionBadges('arga');
+                    if (getCookie('ultzama_completado') === 'si') showCompletionBadges('ultzama');
                 }, 500);
             }
 
-            // Emitir evento para indicar que el progreso está listo
-            console.log('✅ Flu Progress: Sistema de progreso configurado');
             const progressReadyEvent = new Event('fluProgressReady');
             document.dispatchEvent(progressReadyEvent);
         });
@@ -1323,7 +1013,6 @@ add_action( 'wp_footer', 'flu_core_add_visited_functionality' );
  * Update visual elements based on visited pages
  */
 function flu_core_update_progress_elements( $content ) {
-    // Modify content in ALL pages with .progreso query loop
     if ( strpos( $content, 'wp-block-query progreso' ) === false ) {
         return $content;
     }
@@ -1331,7 +1020,6 @@ function flu_core_update_progress_elements( $content ) {
     $cookie_name = 'flu_visited_pages';
     $visited = [];
 
-    // Get visited pages from cookie
     if ( isset( $_COOKIE[ $cookie_name ] ) ) {
         $visited = json_decode( stripslashes( $_COOKIE[ $cookie_name ] ), true );
         if ( ! is_array( $visited ) ) {
@@ -1350,43 +1038,35 @@ function flu_core_update_progress_elements( $content ) {
 
     $xpath = new DOMXPath( $dom );
 
-    // Find all <li> elements in .progreso query loops and add canonical ID as data attribute
     foreach ( $xpath->query( "//div[contains(@class, 'wp-block-query') and contains(@class, 'progreso')]//li[contains(@class, 'post-')]" ) as $li ) {
-        // Get post/page ID from class "post-123"
         preg_match( '/post-(\d+)/', $li->getAttribute( 'class' ), $matches );
         $post_id = isset( $matches[1] ) ? intval( $matches[1] ) : 0;
 
         if ( $post_id ) {
-            // Get canonical ID and add as data attribute
             $canonical_id = flu_core_get_canonical_page_id( $post_id );
             $li->setAttribute( 'data-canonical-id', $canonical_id );
 
             if ( in_array( $canonical_id, $visited ) ) {
-                // Change .wp-block-separator background color
                 foreach ( $xpath->query( ".//*[contains(@class, 'wp-block-separator') and contains(@class, 'has-custom-white-background-color')]", $li ) as $separator ) {
                     $class = $separator->getAttribute( 'class' );
                     $class = str_replace( 'has-custom-white-background-color', 'has-custom-green-background-color', $class );
                     $separator->setAttribute( 'class', $class );
                 }
 
-                // Update wp-block-group elements
                 foreach ( $xpath->query( ".//*[contains(@class, 'wp-block-group') and contains(@class, 'has-border-color') and contains(@class, 'has-custom-green-color')]", $li ) as $group ) {
                     $class = $group->getAttribute( 'class' );
-
                     if ( strpos( $class, 'has-custom-green-background-color' ) === false ) {
                         $class .= ' has-custom-green-background-color';
                     }
                     if ( strpos( $class, 'has-custom-white-color' ) === false ) {
                         $class .= ' has-custom-white-color';
                     }
-
                     $group->setAttribute( 'class', $class );
                 }
             }
         }
     }
 
-    // Clean up and return
     $content = $dom->saveHTML( $dom->documentElement );
     $content = preg_replace( '/^<!DOCTYPE.+?>/', '', str_replace( [ '<html>', '</html>', '<body>', '</body>' ], '', $content ) );
 
@@ -1441,21 +1121,12 @@ function flu_core_enqueue_reset_script() {
                     e.preventDefault();
                     e.stopPropagation();
 
-                    if (processed) {
-                        return false;
-                    }
-
-                    if (!confirm('¿Seguro que quieres resetear tu progreso? Esta acción no se puede deshacer.')) {
-                        return false;
-                    }
+                    if (processed) return false;
+                    if (!confirm('¿Seguro que quieres resetear tu progreso? Esta acción no se puede deshacer.')) return false;
 
                     processed = true;
-
                     var buttonLink = this.querySelector('a.wp-block-button__link');
-                    if (!buttonLink) {
-                        processed = false;
-                        return false;
-                    }
+                    if (!buttonLink) { processed = false; return false; }
 
                     var originalText = buttonLink.textContent;
                     buttonLink.style.pointerEvents = 'none';
@@ -1492,9 +1163,7 @@ function flu_core_enqueue_reset_script() {
                         processed = false;
                     };
 
-                    var data = 'action=flu_core_reset_visited&nonce=<?php echo wp_create_nonce('flu_core_reset_nonce'); ?>';
-                    xhr.send(data);
-
+                    xhr.send('action=flu_core_reset_visited&nonce=<?php echo wp_create_nonce('flu_core_reset_nonce'); ?>');
                     return false;
                 });
             });

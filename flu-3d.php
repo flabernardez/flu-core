@@ -169,43 +169,33 @@ function flu_3d_aframe_functionality() {
         }
 
         #atrapado {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            z-index: -1;
-            opacity: 0;
-            visibility: hidden;
-            pointer-events: none !important;
-            transition: opacity 0.4s ease-out, visibility 0s 0.4s, z-index 0s 0.4s;
-            overflow-y: auto;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-            background: rgba(0, 0, 0, 0.95);
+            /* Ya no es overlay, es sección normal como el resto */
         }
 
         #atrapado > * {
             width: 100%;
             max-width: 600px;
-            pointer-events: none !important;
         }
 
-        #atrapado.show {
-            z-index: 9999;
-            width: 100vw;
-            margin: 0;
-            background: transparent;
-            opacity: 1;
-            visibility: visible;
-            pointer-events: auto !important;
-            transition: opacity 0.4s ease-out, visibility 0s, z-index 0s;
+        /* Evitar movimiento horizontal en transiciones entre secciones */
+        html {
+            scroll-behavior: auto !important;
+            overflow-x: hidden !important;
         }
 
-        #atrapado.show > * {
-            pointer-events: auto !important;
+        body {
+            overflow-x: hidden !important;
+        }
+
+        /* Forzar que #capturado no cause scroll horizontal */
+        #capturado {
+            overflow-x: hidden;
+            max-width: 100vw;
+        }
+
+        /* Forzar scroll instantáneo en toda la página */
+        * {
+            scroll-behavior: auto !important;
         }
 
         /* Modal para activar giroscopio */
@@ -274,6 +264,9 @@ function flu_3d_aframe_functionality() {
         var cameraInitialized = false;
         var gyroscopeInitialized = false;
         var capturaContainers = [];
+
+        // Variable global para guardar el stream de la cámara
+        var activeCameraStream = null;
 
         // Sistema de precarga de modelos GLB
         var glbCache = {};
@@ -381,6 +374,44 @@ function flu_3d_aframe_functionality() {
             console.log('✅ Permiso de giroscopio guardado en cookie');
         }
 
+        /**
+         * Detener la cámara y ocultar el video
+         */
+        function stopCamera() {
+            console.log('📷 Deteniendo cámara...');
+
+            // Detener todos los tracks del stream activo
+            if (activeCameraStream) {
+                activeCameraStream.getTracks().forEach(function(track) {
+                    track.stop();
+                    console.log('🛑 Track detenido:', track.kind);
+                });
+                activeCameraStream = null;
+            }
+
+            // Ocultar y remover todos los videos de cámara en .flu-captura
+            const videos = document.querySelectorAll('.flu-captura video');
+            videos.forEach(function(video) {
+                video.style.display = 'none';
+                if (video.srcObject) {
+                    video.srcObject.getTracks().forEach(function(track) {
+                        track.stop();
+                    });
+                    video.srcObject = null;
+                }
+                console.log('📹 Video ocultado y stream detenido');
+            });
+
+            // También ocultar las escenas A-Frame en #captura
+            const capturaSection = document.getElementById('captura');
+            if (capturaSection) {
+                const scenes = capturaSection.querySelectorAll('a-scene');
+                scenes.forEach(function(scene) {
+                    scene.style.display = 'none';
+                });
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', function() {
             const capturaDivs = document.querySelectorAll('.flu-captura');
             console.log('🔍 Total .flu-captura encontrados:', capturaDivs.length);
@@ -442,64 +473,101 @@ function flu_3d_aframe_functionality() {
                 }
             });
 
-            initializeAtrapado();
             handleCapturaHash();
 
             window.addEventListener('hashchange', function() {
                 console.log('🔄 Hash changed to:', window.location.hash);
                 handleCapturaHash();
 
-                if (window.location.hash === '#atrapado') {
-                    showAtrapado();
-                } else {
-                    hideAtrapado();
+                // Scroll instantáneo a cualquier sección
+                var hash = window.location.hash;
+                if (hash && hash !== '#') {
+                    var targetElement = document.querySelector(hash);
+                    if (targetElement) {
+                        targetElement.scrollIntoView({ behavior: 'instant', block: 'start' });
+                    }
+                }
+
+                // DETENER LA CÁMARA cuando se va a #atrapado o #capturado
+                if (window.location.hash === '#atrapado' || window.location.hash === '#capturado') {
+                    stopCamera();
                 }
 
                 // Si cambiamos a #capturado, verificar modelos 3D
                 if (window.location.hash === '#capturado') {
                     console.log('🎯 Navegando a #capturado, verificando modelos 3D...');
+                    // DETENER LA CÁMARA cuando se muestra #capturado
+                    stopCamera();
+
                     setTimeout(function() {
+                        // Buscar el contenedor #capturado
                         const capturadoDiv = document.getElementById('capturado');
+
+                        // También buscar cualquier .flu-captura que esté relacionado con #capturado
+                        // Puede ser que #capturado contenga .flu-captura, o que .flu-captura tenga #capturado como ancestro
+                        let flu3dContainers = [];
+
                         if (capturadoDiv) {
-                            const flu3dInCapturado = capturadoDiv.querySelectorAll('.flu-captura');
-                            console.log('   - .flu-captura en #capturado:', flu3dInCapturado.length);
+                            // Caso 1: .flu-captura está DENTRO de #capturado
+                            const insideContainers = capturadoDiv.querySelectorAll('.flu-captura');
+                            insideContainers.forEach(function(c) { flu3dContainers.push(c); });
 
-                            flu3dInCapturado.forEach(function(div, idx) {
-                                console.log('   - Verificando .flu-captura[' + idx + '] en #capturado');
-                                const existingScene = div.querySelector('a-scene');
-
-                                if (existingScene) {
-                                    console.log('   ✅ Ya tiene a-scene, ajustando parámetros para #capturado...');
-
-                                    // Buscar el modelo dentro de la escena
-                                    const model = existingScene.querySelector('a-gltf-model');
-                                    if (model) {
-                                        // Cambiar los parámetros al estilo de #capturado
-                                        model.setAttribute('position', '0 1.6 -2.2');
-                                        model.setAttribute('scale', '1.3 1.3 1.3');
-                                        model.setAttribute('rotation', '-10 0 0');
-                                        console.log('   🎨 Parámetros ajustados a estilo #capturado');
-                                    }
-
-                                    // Ocultar el loader si existe
-                                    const existingLoader = div.querySelector('.virus-loader');
-                                    if (existingLoader) {
-                                        existingLoader.classList.add('hidden');
-                                    }
-
-                                } else {
-                                    console.log('   ❌ NO tiene a-scene, intentando crear...');
-                                    const flu3dImg = div.querySelector('.flu-3d img');
-                                    if (flu3dImg && flu3dImg.src) {
-                                        const imgSrc = flu3dImg.src;
-                                        const fileName = imgSrc.split('/').pop().split('.')[0];
-                                        const modelPath = '/wp-content/uploads/' + fileName + '.glb';
-                                        createModelAFrameSceneForCapturado(div, modelPath);
-                                    }
-                                }
-                            });
+                            // Caso 2: #capturado mismo tiene clase .flu-captura
+                            if (capturadoDiv.classList.contains('flu-captura')) {
+                                flu3dContainers.push(capturadoDiv);
+                            }
                         }
-                    }, 100);
+
+                        // Caso 3: Buscar en capturaContainers los que están relacionados con #capturado
+                        capturaContainers.forEach(function(container) {
+                            if (container.closest('#capturado') !== null && !flu3dContainers.includes(container)) {
+                                flu3dContainers.push(container);
+                            }
+                        });
+
+                        console.log('   - Contenedores .flu-captura para #capturado:', flu3dContainers.length);
+
+                        flu3dContainers.forEach(function(div, idx) {
+                            console.log('   - Verificando contenedor[' + idx + '] en #capturado');
+                            const existingScene = div.querySelector('a-scene');
+
+                            if (existingScene) {
+                                console.log('   ✅ Ya tiene a-scene, ajustando parámetros para #capturado...');
+
+                                // Buscar el modelo dentro de la escena
+                                const model = existingScene.querySelector('a-gltf-model');
+                                if (model) {
+                                    // Cambiar los parámetros al estilo de #capturado
+                                    model.setAttribute('position', '0 1.6 -2.2');
+                                    model.setAttribute('scale', '1.3 1.3 1.3');
+                                    model.setAttribute('rotation', '-10 0 0');
+                                    console.log('   🎨 Parámetros ajustados a estilo #capturado');
+                                }
+
+                                // Ocultar el loader si existe
+                                const existingLoader = div.querySelector('.virus-loader');
+                                if (existingLoader) {
+                                    existingLoader.classList.add('hidden');
+                                }
+
+                                // Asegurarse de que la escena esté visible
+                                existingScene.classList.add('loaded');
+
+                            } else {
+                                console.log('   ❌ NO tiene a-scene, creando nuevo...');
+                                const flu3dImg = div.querySelector('.flu-3d img');
+                                if (flu3dImg && flu3dImg.src) {
+                                    const imgSrc = flu3dImg.src;
+                                    const fileName = imgSrc.split('/').pop().split('.')[0];
+                                    const modelPath = '/wp-content/uploads/' + fileName + '.glb';
+                                    console.log('   📦 Creando escena para modelo:', modelPath);
+                                    createModelAFrameSceneForCapturado(div, modelPath);
+                                } else {
+                                    console.log('   ⚠️ No se encontró imagen .flu-3d en este contenedor');
+                                }
+                            }
+                        });
+                    }, 150);
                 }
             });
 
@@ -513,7 +581,7 @@ function flu_3d_aframe_functionality() {
             }, true);
 
             if (window.location.hash === '#atrapado') {
-                showAtrapado();
+                stopCamera();
             }
 
             // Log inicial si ya estamos en #capturado
@@ -682,65 +750,16 @@ function flu_3d_aframe_functionality() {
                 });
         }
 
-        function initializeAtrapado() {
-            var atrapado = document.getElementById('atrapado');
-            if (atrapado) {
-                atrapado.classList.remove('show');
-                atrapado.style.pointerEvents = 'none';
-                atrapado.style.visibility = 'hidden';
-                atrapado.style.opacity = '0';
-                atrapado.style.zIndex = '-1';
-
-                var allChildren = atrapado.querySelectorAll('*');
-                allChildren.forEach(function(child) {
-                    child.style.pointerEvents = 'none';
-                });
-            }
-        }
-
-        function showAtrapado() {
-            var atrapado = document.getElementById('atrapado');
-            if (atrapado) {
-                setTimeout(function() {
-                    atrapado.classList.add('show');
-                    atrapado.style.pointerEvents = 'auto';
-                    atrapado.style.visibility = 'visible';
-                    atrapado.style.opacity = '1';
-                    atrapado.style.zIndex = '9999';
-
-                    var allChildren = atrapado.querySelectorAll('*');
-                    allChildren.forEach(function(child) {
-                        child.style.pointerEvents = 'auto';
-                    });
-                }, 50);
-            }
-        }
-
-        function hideAtrapado() {
-            var atrapado = document.getElementById('atrapado');
-            if (atrapado) {
-                atrapado.classList.remove('show');
-
-                setTimeout(function() {
-                    atrapado.style.pointerEvents = 'none';
-                    atrapado.style.visibility = 'hidden';
-                    atrapado.style.opacity = '0';
-                    atrapado.style.zIndex = '-1';
-
-                    var allChildren = atrapado.querySelectorAll('*');
-                    allChildren.forEach(function(child) {
-                        child.style.pointerEvents = 'none';
-                    });
-                }, 400);
-            }
-        }
-
         function initializeCameraForCaptura() {
             if (cameraInitialized) return;
 
             console.log('📸 Inicializando cámara');
 
             capturaContainers.forEach(function(container) {
+                // Solo inicializar cámara en #captura, no en otros contenedores
+                const isInCaptura = container.closest('#captura') !== null;
+                if (!isInCaptura) return;
+
                 requestCameraPermission(container, function() {
                     const flu3dImg = container.querySelector('.flu-3d img');
 
@@ -768,6 +787,9 @@ function flu_3d_aframe_functionality() {
 
             navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
                 .then(function(stream) {
+                    // Guardar referencia al stream activo
+                    activeCameraStream = stream;
+
                     const video = document.createElement('video');
                     video.autoplay = true;
                     video.muted = true;
