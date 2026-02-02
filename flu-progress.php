@@ -885,19 +885,23 @@ function flu_core_add_visited_functionality() {
                 // MISIÓN COMPLETADA (ambos ríos)
                 if (isEuskera) {
                     title.textContent = 'Lana eginda!';
-                    text.innerHTML = 'Arga eta Ultzama ibaien birus guztiak harrapatu dituzu.<br><br>Bi ibai hauek anaiak dira: batean gertatzen denak bestean ere eragina du.<br>Zure laguntzari esker, orain biak osasuntsuago daude.<br><br>Zorionak! Ekosistema babestea lortu duzu!';
+                    text.innerHTML = 'Arga eta Ultzama ' +
+                        'ibaien birus guztiak harrapatu dituzu.<br><br>Bi ibai hauek anaiak dira: batean gertatzen denak bestean ere eragina du. Zure laguntzari esker, orain biak osasuntsuago daude.<br><br>Zorionak! Ekosistema babestea lortu duzu!';
                 } else {
                     title.textContent = '¡Misión completada!';
-                    text.innerHTML = 'Has capturado todos los virus del río Arga y del río Ulzama.<br><br>El Arga y el Ulzama son ríos hermanos: lo que ocurre en uno también afecta al otro.<br>Gracias a tu ayuda, ahora los dos ríos están más sanos y protegidos.<br><br>¡Has salvado el ecosistema!';
+                    text.innerHTML = 'Has capturado todos' +
+                        ' los virus del río Arga y del río Ulzama.<br><br>El Arga y el Ulzama son ríos hermanos: lo que ocurre en uno también afecta al otro. Gracias a tu ayuda, ahora los dos ríos están más sanos y protegidos.<br><br>¡Has salvado el ecosistema!';
                 }
             } else if (riverName === 'arga') {
                 // Solo ARGA completado
                 if (isEuskera) {
                     title.textContent = 'Lortu duzu!';
-                    text.innerHTML = 'Arga ibaiko birus guztiak harrapatu dituzu.<br>Ibaiak lasai arnasa hartzen du berriro, zuri esker.<br><br>Jarraitu zure abentura Ultzama ibaian!';
+                    text.innerHTML = 'Arga ibaiko birus ' +
+                        'guztiak harrapatu dituzu. Ibaiak lasai arnasa hartzen du berriro, zuri esker.<br><br>Jarraitu zure abentura Ultzama ibaian!';
                 } else {
                     title.textContent = '¡Lo has conseguido!';
-                    text.innerHTML = 'Has eliminado todos los virus del río Arga.<br>El río vuelve a respirar tranquilo gracias a ti.<br><br>¡Continúa tu aventura en el río Ulzama!';
+                    text.innerHTML = 'Has eliminado todos' +
+                        ' los virus del río Arga. El río vuelve a respirar tranquilo gracias a ti.<br><br>¡Continúa tu aventura en el río Ulzama!';
                 }
             } else if (riverName === 'ultzama') {
                 // Solo ULTZAMA completado (sin ARGA - caso raro pero posible)
