@@ -876,18 +876,38 @@ function flu_core_add_visited_functionality() {
 
             const title = document.createElement('div');
             title.className = 'river-complete-title';
-            title.textContent = isEuskera ? 'Ibaia garbi!' : '¡Río limpio!';
 
             const text = document.createElement('div');
             text.className = 'river-complete-text';
+
+            // Determinar textos según idioma y estado de completitud
             if (bothComplete) {
-                text.textContent = isEuskera
-                    ? 'Ibaietako birusak garbitzen amaitu duzu! Zorionak!'
-                    : '¡Terminaste de limpiar los ríos de virus! Enhorabuena';
-            } else {
-                text.textContent = isEuskera
-                    ? riverName.toUpperCase() + ' ibaia birusetatik garbitzen lortu duzu. Zorionak!'
-                    : 'Has conseguido limpiar el río ' + riverName.toUpperCase() + ' de virus. ¡Enhorabuena!';
+                // MISIÓN COMPLETADA (ambos ríos)
+                if (isEuskera) {
+                    title.textContent = 'Lana eginda!';
+                    text.innerHTML = 'Arga eta Ultzama ibaien birus guztiak harrapatu dituzu.<br><br>Bi ibai hauek anaiak dira: batean gertatzen denak bestean ere eragina du.<br>Zure laguntzari esker, orain biak osasuntsuago daude.<br><br>Zorionak! Ekosistema babestea lortu duzu!';
+                } else {
+                    title.textContent = '¡Misión completada!';
+                    text.innerHTML = 'Has capturado todos los virus del río Arga y del río Ulzama.<br><br>El Arga y el Ulzama son ríos hermanos: lo que ocurre en uno también afecta al otro.<br>Gracias a tu ayuda, ahora los dos ríos están más sanos y protegidos.<br><br>¡Has salvado el ecosistema!';
+                }
+            } else if (riverName === 'arga') {
+                // Solo ARGA completado
+                if (isEuskera) {
+                    title.textContent = 'Lortu duzu!';
+                    text.innerHTML = 'Arga ibaiko birus guztiak harrapatu dituzu.<br>Ibaiak lasai arnasa hartzen du berriro, zuri esker.<br><br>Jarraitu zure abentura Ultzama ibaian!';
+                } else {
+                    title.textContent = '¡Lo has conseguido!';
+                    text.innerHTML = 'Has eliminado todos los virus del río Arga.<br>El río vuelve a respirar tranquilo gracias a ti.<br><br>¡Continúa tu aventura en el río Ulzama!';
+                }
+            } else if (riverName === 'ultzama') {
+                // Solo ULTZAMA completado (sin ARGA - caso raro pero posible)
+                if (isEuskera) {
+                    title.textContent = 'Birus gabeko ibaia';
+                    text.innerHTML = 'Ultzama ibaiko birus guztiak harrapatu dituzu.<br>Zorionak!';
+                } else {
+                    title.textContent = '¡Río limpio!';
+                    text.innerHTML = 'Has conseguido limpiar el río Ultzama de virus.<br>¡Enhorabuena!';
+                }
             }
 
             const button = document.createElement('button');
@@ -942,12 +962,15 @@ function flu_core_add_visited_functionality() {
 
             setTimeout(function() {
                 if (bothComplete) {
-                    if (argaCompleto === 'si' && argaModalShown !== 'si') {
+                    // Si ambos están completos, mostrar el modal de "misión completada"
+                    // Usamos el modal de arga o ultzama (el que no se haya mostrado) con bothComplete=true
+                    if (argaModalShown !== 'si') {
                         showRiverCompleteModal('arga', true);
-                    } else if (ultzamaCompleto === 'si' && ultzamaModalShown !== 'si') {
+                    } else if (ultzamaModalShown !== 'si') {
                         showRiverCompleteModal('ultzama', true);
                     }
                 } else {
+                    // Solo un río completado
                     if (argaCompleto === 'si' && argaModalShown !== 'si') {
                         showRiverCompleteModal('arga', false);
                     }
