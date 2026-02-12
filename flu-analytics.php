@@ -22,8 +22,6 @@ function flu_analytics_create_table() {
         id bigint(20) NOT NULL AUTO_INCREMENT,
         page_id bigint(20) NOT NULL,
         visit_date datetime DEFAULT CURRENT_TIMESTAMP,
-        user_ip varchar(45) NOT NULL,
-        user_agent text,
         PRIMARY KEY (id),
         KEY page_id (page_id),
         KEY visit_date (visit_date)
@@ -128,54 +126,19 @@ function flu_analytics_track_visit() {
     global $wpdb;
     $table_name = $wpdb->prefix . 'flu_analytics';
 
-    $user_ip = flu_analytics_get_user_ip();
-    $user_agent = isset( $_SERVER['HTTP_USER_AGENT'] ) ? sanitize_text_field( $_SERVER['HTTP_USER_AGENT'] ) : '';
-
     $wpdb->insert(
         $table_name,
         array(
-            'page_id' => $page_id,
-            'user_ip' => $user_ip,
-            'user_agent' => $user_agent,
-            'visit_date' => current_time( 'mysql' )
+            'page_id'    => $page_id,
+            'visit_date' => current_time( 'mysql' ),
         ),
         array(
             '%d',
             '%s',
-            '%s',
-            '%s'
         )
     );
 }
 add_action( 'wp_footer', 'flu_analytics_track_visit' );
-
-/**
- * Get user IP address
- */
-function flu_analytics_get_user_ip() {
-    $ip_keys = array(
-        'HTTP_CLIENT_IP',
-        'HTTP_X_FORWARDED_FOR',
-        'HTTP_X_FORWARDED',
-        'HTTP_X_CLUSTER_CLIENT_IP',
-        'HTTP_FORWARDED_FOR',
-        'HTTP_FORWARDED',
-        'REMOTE_ADDR'
-    );
-
-    foreach ( $ip_keys as $key ) {
-        if ( array_key_exists( $key, $_SERVER ) === true ) {
-            foreach ( explode( ',', $_SERVER[ $key ] ) as $ip ) {
-                $ip = trim( $ip );
-                if ( filter_var( $ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE ) !== false ) {
-                    return $ip;
-                }
-            }
-        }
-    }
-
-    return isset( $_SERVER['REMOTE_ADDR'] ) ? $_SERVER['REMOTE_ADDR'] : '0.0.0.0';
-}
 
 /**
  * Add analytics admin menu
