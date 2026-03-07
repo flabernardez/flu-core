@@ -4,7 +4,7 @@
  * Description: Core functions
  * Requires at least: 6.6
  * Requires PHP: 7.0
- * Version: 0.1.0
+ * Version: 0.1.1
  * Author: Flavia Bernárdez Rodríguez
  * Author URI: https://flabernardez.com
  * License: GPL-2.0-or-later
@@ -115,6 +115,28 @@ function flu_core_check_glb_mime_type($data, $file, $filename, $mimes) {
     return $data;
 }
 add_filter('wp_check_filetype_and_ext', 'flu_core_check_glb_mime_type', 10, 4);
+
+/**
+ * Allow GeoJSON file uploads
+ */
+function flu_core_allow_geojson_uploads($mimes) {
+    $mimes['geojson'] = 'application/geo+json';
+    return $mimes;
+}
+add_filter('upload_mimes', 'flu_core_allow_geojson_uploads');
+
+/**
+ * Fix GeoJSON MIME type check
+ */
+function flu_core_check_geojson_mime_type($data, $file, $filename, $mimes) {
+    $ext = pathinfo($filename, PATHINFO_EXTENSION);
+    if ($ext === 'geojson') {
+        $data['ext'] = 'geojson';
+        $data['type'] = 'application/geo+json';
+    }
+    return $data;
+}
+add_filter('wp_check_filetype_and_ext', 'flu_core_check_geojson_mime_type', 10, 4);
 
 /**
  * Basic camera functionality for .flu-captura divs
