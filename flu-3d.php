@@ -539,7 +539,7 @@ function flu_3d_aframe_functionality() {
                                 if (model) {
                                     // Cambiar los parámetros al estilo de #capturado
                                     model.setAttribute('position', '0 1.6 -2.2');
-                                    model.setAttribute('scale', '1.3 1.3 1.3');
+                                    model.setAttribute('scale', '1.8 1.8 1.8');
                                     model.setAttribute('rotation', '-10 0 0');
                                     console.log('   🎨 Parámetros ajustados a estilo #capturado');
                                 }
@@ -567,6 +567,10 @@ function flu_3d_aframe_functionality() {
                                 }
                             }
                         });
+
+                        // Asegurar que el giroscopio y la animación estén activos en #capturado
+                        console.log('🔄 Asegurando giroscopio activo para #capturado');
+                        enableGyroscope();
                     }, 150);
                 }
             });
@@ -808,7 +812,10 @@ function flu_3d_aframe_functionality() {
         }
 
         function startSmoothAnimation() {
-            if (animationFrameId) return;
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
 
             function animate() {
                 currentRotation.x += (targetRotation.x - currentRotation.x) * smoothingFactor;
@@ -1122,7 +1129,7 @@ function flu_3d_aframe_functionality() {
             const model = document.createElement('a-gltf-model');
             model.setAttribute('src', modelPath);
             model.setAttribute('position', '0 1.6 -2.2');  // X(izq/der) Y(altura) Z(profundidad: - es más cerca)
-            model.setAttribute('scale', '1.3 1.3 1.3');
+            model.setAttribute('scale', '1.8 1.8 1.8');
             // X Y Z (Y más grande = estirado vertical)
             model.setAttribute('rotation', '-10 0 0');     // X(inclinación) Y(giro) Z(roll)
 
