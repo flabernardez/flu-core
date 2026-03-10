@@ -129,7 +129,7 @@ function flu_3d_aframe_functionality() {
         #capturado.flu-captura a-scene {
             margin-top: 0 !important;
             position: absolute !important;
-            top: -15vh !important;
+            top: -13vh !important;
             left: 0 !important;
             width: 100% !important;
             height: 100% !important;
@@ -539,7 +539,7 @@ function flu_3d_aframe_functionality() {
                                 if (model) {
                                     // Cambiar los parámetros al estilo de #capturado
                                     model.setAttribute('position', '0 1.6 -2.2');
-                                    model.setAttribute('scale', '1.8 1.8 1.8');
+                                    model.setAttribute('scale', '1.5 1.5 1.5');
                                     model.setAttribute('rotation', '-10 0 0');
                                     console.log('   🎨 Parámetros ajustados a estilo #capturado');
                                 }
@@ -1129,7 +1129,7 @@ function flu_3d_aframe_functionality() {
             const model = document.createElement('a-gltf-model');
             model.setAttribute('src', modelPath);
             model.setAttribute('position', '0 1.6 -2.2');  // X(izq/der) Y(altura) Z(profundidad: - es más cerca)
-            model.setAttribute('scale', '1.8 1.8 1.8');
+            model.setAttribute('scale', '1.5 1.5 1.5');
             // X Y Z (Y más grande = estirado vertical)
             model.setAttribute('rotation', '-10 0 0');     // X(inclinación) Y(giro) Z(roll)
 
