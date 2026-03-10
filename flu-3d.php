@@ -129,7 +129,7 @@ function flu_3d_aframe_functionality() {
         #capturado.flu-captura a-scene {
             margin-top: 0 !important;
             position: absolute !important;
-            top: -20vh !important;
+            top: -15vh !important;
             left: 0 !important;
             width: 100% !important;
             height: 100% !important;
@@ -434,7 +434,7 @@ function flu_3d_aframe_functionality() {
 
                     // SOLO crear el modelo si YA estamos en #capturado al cargar la página
                     if (window.location.hash === '#capturado') {
-                        const flu3dImg = div.querySelector('.flu-3d img');
+                        const flu3dImg = div.querySelector('.flu-3d img') || document.querySelector('#captura .flu-3d img');
 
                         if (flu3dImg) {
                             console.log('✅ Imagen .flu-3d encontrada en #capturado');
@@ -555,7 +555,7 @@ function flu_3d_aframe_functionality() {
 
                             } else {
                                 console.log('   ❌ NO tiene a-scene, creando nuevo...');
-                                const flu3dImg = div.querySelector('.flu-3d img');
+                                const flu3dImg = div.querySelector('.flu-3d img') || document.querySelector('#captura .flu-3d img');
                                 if (flu3dImg && flu3dImg.src) {
                                     const imgSrc = flu3dImg.src;
                                     const fileName = imgSrc.split('/').pop().split('.')[0];
